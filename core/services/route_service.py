@@ -79,8 +79,12 @@ def calculer_parcours(points_gpx: list, vitesse_plat_kmh: float,
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def memoire_meteo(frozen):
-    # On enlève is_past et date_str car ils ne sont pas acceptés par recuperer_meteo_batch
-    return recuperer_meteo_batch(frozen)
+    # frozen est un tuple de triplets : (lat, lon, heure_str)
+    latitudes  = [cp[0] for cp in frozen]
+    longitudes = [cp[1] for cp in frozen]
+    dates_iso  = [cp[2] for cp in frozen]   # les heures au format "HH:MM"
+
+    return recuperer_meteo_batch(latitudes, longitudes, dates_iso)
 
 
 def enrichir_checkpoints_meteo(checkpoints: list, date_depart: datetime) -> list:
