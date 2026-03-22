@@ -33,14 +33,17 @@ from core.services.climbing_service import (
 from infrastructure.open_meteo_client import (
     recuperer_fuseau, recuperer_soleil, recuperer_uv_pollen, recuperer_meteo_batch,
 )
-from infrastructure.osm_client import recuperer_points_eau   # ← on enlève enrichir_cols
+from infrastructure.osm_client import recuperer_points_eau
 from config.settings import MAX_CHECKPOINTS_METEO
 
 
 # ── Cache météo ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def memoire_meteo(frozen, is_past=False, date_str=None):
-    return recuperer_meteo_batch(frozen, is_past=is_past, date_str=date_str)
+def memoire_meteo(frozen):
+    latitudes  = [cp[0] for cp in frozen]
+    longitudes = [cp[1] for cp in frozen]
+    dates_iso  = [cp[2] for cp in frozen]
+    return recuperer_meteo_batch(latitudes, longitudes, dates_iso)
 
 
 def main():
@@ -93,7 +96,6 @@ def main():
     # ── Détection ascensions + points d'eau OSM ────────────────────────────────
     with st.spinner("Analyse du profil altimétrique et points d'eau…"):
         ascensions = detecter_ascensions(df_profil)
-        # enrichir_cols a été supprimé → on garde juste les ascensions brutes
         points_eau = recuperer_points_eau(points_gpx)
 
     # ── Météo ──────────────────────────────────────────────────────────────────
@@ -101,7 +103,6 @@ def main():
         resultats = enrichir_checkpoints_meteo(checkpoints, date_depart)
         analyse_meteo = analyser_meteo_detaillee(resultats)
 
-        # Soleil + UV/pollen (point milieu)
         milieu_lat = sum(p.latitude for p in points_gpx) / len(points_gpx)
         milieu_lon = sum(p.longitude for p in points_gpx) / len(points_gpx)
         date_str = date_depart.strftime("%Y-%m-%d")
@@ -114,11 +115,12 @@ def main():
     for asc in ascensions:
         mins_col, vit_col = estimer_temps_col(
             asc["_sommet_km"] - asc["_debut_km"], asc["_pente_moy"], vitesse)
-        heure_sommet = date_depart + timedelta(minutes=mins_col)  # approximation
+        heure_sommet = date_depart + timedelta(minutes=mins_col)
         asc["Temps col"]      = f"{mins_col} min ({vit_col} km/h)"
         asc["Arrivée sommet"] = heure_sommet.strftime("%H:%M")
 
-    calories = calculer_calories(dist_tot, d_plus, temps_s, poids)
+    # Correction ici : on passe 'vitesse' en 5e argument
+    calories = calculer_calories(dist_tot, d_plus, temps_s, poids, vitesse)
 
     # ── Affichage ──────────────────────────────────────────────────────────────
     render_metrics_banner(score, dist_tot, d_plus, d_moins, temps_s,
