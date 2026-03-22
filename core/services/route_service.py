@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 
 import streamlit as st
 
-# Ajout des imports manquants pour que memoire_meteo puisse appeler recuperer_meteo_batch
 from infrastructure.open_meteo_client import recuperer_meteo_batch
 
 from core.utils.geo import calculer_cap, direction_vent_relative, wind_chill
@@ -79,8 +78,9 @@ def calculer_parcours(points_gpx: list, vitesse_plat_kmh: float,
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def memoire_meteo(frozen, is_past=False, date_str=None):
-    return recuperer_meteo_batch(frozen, is_past=is_past, date_str=date_str)
+def memoire_meteo(frozen):
+    # On enlève is_past et date_str car ils ne sont pas acceptés par recuperer_meteo_batch
+    return recuperer_meteo_batch(frozen)
 
 
 def enrichir_checkpoints_meteo(checkpoints: list, date_depart: datetime) -> list:
