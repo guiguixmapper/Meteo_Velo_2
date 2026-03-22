@@ -1,6 +1,6 @@
 """
 core/services/route_service.py
-Version stable, robuste, sans crash si météo partielle
+Version robuste : aucune donnée météo manquante ne peut faire planter l'app
 """
 
 import gpxpy
@@ -124,23 +124,20 @@ def analyser_meteo_detaillee(resultats, dist_tot):
 
 
 # ─────────────────────────────────────────────────────────────
-# SCORE (CORRIGÉ)
+# SCORE — DÉFINITIVEMENT SÉCURISÉ
 # ─────────────────────────────────────────────────────────────
 
 def calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids, dist_tot):
     dist_km = dist_tot / 1000
     cout_route = (dist_km / 200) + (d_plus / 2000)
 
-    aero = pluie = temp = 0
+    aero = pluie = temp = 0.0
     n = max(1, len(resultats))
 
     for c in resultats:
-        v = c.get("vent_val", 0)
-        p = c.get("pluie_pct", 0)
-
-        # 🔒 CORRECTION DÉFINITIVE ICI
+        v = c.get("vent_val") if c.get("vent_val") is not None else 0
+        p = c.get("pluie_pct") if c.get("pluie_pct") is not None else 0
         t = c.get("temp_val") if c.get("temp_val") is not None else 20
-
         e = c.get("effet", "")
 
         temp += abs(t - 20) / 10
