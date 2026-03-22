@@ -173,8 +173,8 @@ def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau:
     carte = folium.Map(**kwargs)
 
     # ── Deux calques séparés pour le tracé ──
-    fg_trace_pente     = folium.FeatureGroup(name="📍 Parcours (Pente)", show=True)
-    fg_trace_classique = folium.FeatureGroup(name="📍 Parcours (Classique)", show=False)
+    fg_trace_pente     = folium.FeatureGroup(name="📍 Parcours (Pente)", show=False)
+    fg_trace_classique = folium.FeatureGroup(name="📍 Parcours (Classique)", show=True)
     
     fg_meteo = folium.FeatureGroup(name="🌤️ Météo",       show=True)
     fg_cols  = folium.FeatureGroup(name="🏔️ Ascensions",  show=True)
