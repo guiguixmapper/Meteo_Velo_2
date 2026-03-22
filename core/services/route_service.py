@@ -18,7 +18,6 @@ from core.services.climbing_service import estimer_watts, get_zone, zones_active
 
 
 def parser_gpx(data: bytes) -> list:
-    """Parse un fichier GPX et retourne la liste des points."""
     try:
         gpx = gpxpy.parse(data)
         return [p for t in gpx.tracks for s in t.segments for p in s.points]
@@ -28,9 +27,6 @@ def parser_gpx(data: bytes) -> list:
 
 def calculer_parcours(points_gpx: list, vitesse_plat_kmh: float,
                       date_depart: datetime, intervalle_sec: int) -> dict:
-    """
-    Calcule les statistiques du parcours et génère les checkpoints.
-    """
     checkpoints, profil_data = [], []
     dist_tot = d_plus = d_moins = temps_s = prochain = cap = 0.0
     vms = (vitesse_plat_kmh * 1000) / 3600
@@ -56,7 +52,7 @@ def calculer_parcours(points_gpx: list, vitesse_plat_kmh: float,
                 "lat":     p2.latitude,
                 "lon":     p2.longitude,
                 "cap":     cap,
-                "Heure":   (date_depart + timedelta(seconds=temps_s)).strftime("%H:%M"),
+                "Heure":   (date_depart + timedelta(seconds=temps_s)).strftime("%Y-%m-%dT%H:%M"),  # ← format ISO complet
                 "Km":      round(dist_tot / 1000, 1),
                 "Alt (m)": int(p2.elevation) if p2.elevation is not None else None,
             })
@@ -79,16 +75,14 @@ def calculer_parcours(points_gpx: list, vitesse_plat_kmh: float,
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def memoire_meteo(frozen):
-    # frozen est un tuple de triplets : (lat, lon, heure_str)
     latitudes  = [cp[0] for cp in frozen]
     longitudes = [cp[1] for cp in frozen]
-    dates_iso  = [cp[2] for cp in frozen]   # les heures au format "HH:MM"
+    dates_iso  = [cp[2] for cp in frozen]  # maintenant au format YYYY-MM-DDTHH:MM
 
     return recuperer_meteo_batch(latitudes, longitudes, dates_iso)
 
 
 def enrichir_checkpoints_meteo(checkpoints: list, date_depart: datetime) -> list:
-    """Enrichit les checkpoints avec les données météo Open-Meteo."""
     if not checkpoints:
         return []
 
@@ -106,7 +100,6 @@ def enrichir_checkpoints_meteo(checkpoints: list, date_depart: datetime) -> list
 
 
 def analyser_meteo_detaillee(resultats: list) -> dict:
-    """Analyse globale de la météo sur le parcours."""
     if not resultats:
         return {}
 
@@ -135,7 +128,6 @@ def analyser_meteo_detaillee(resultats: list) -> dict:
 
 
 def calculer_score(dist_tot: float, d_plus: float, resultats: list) -> dict:
-    """Calcule le score global de la sortie (0–10)."""
     dist_km = dist_tot / 1000
     cout_route = (dist_km / 100.0) + (d_plus / 2000.0)
 
