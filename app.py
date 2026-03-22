@@ -2,8 +2,6 @@
 app.py — Point d'entrée unique
 ================================
 Vélo & Météo — Analyse de tracé GPX.
-Ce fichier ne contient QUE le bootstrap et l'orchestration.
-Toute la logique est dans core/, infrastructure/ et ui/.
 """
 
 import streamlit as st
@@ -35,19 +33,15 @@ from core.services.climbing_service import (
 from infrastructure.open_meteo_client import (
     recuperer_fuseau, recuperer_soleil, recuperer_uv_pollen, recuperer_meteo_batch,
 )
-from infrastructure.osm_client import enrichir_cols, recuperer_points_eau
+from infrastructure.osm_client import recuperer_points_eau   # ← on enlève enrichir_cols
 from config.settings import MAX_CHECKPOINTS_METEO
 
 
-# ── Cache météo avec retry ─────────────────────────────────────────────────────
+# ── Cache météo ────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def memoire_meteo(frozen, is_past=False, date_str=None):
     return recuperer_meteo_batch(frozen, is_past=is_past, date_str=date_str)
 
-
-# ==============================================================================
-# MAIN
-# ==============================================================================
 
 def main():
     st.set_page_config(page_title="Vélo & Météo", page_icon="🚴‍♂️", layout="wide")
@@ -96,10 +90,10 @@ def main():
     checkpoints    = res["checkpoints"]
     df_profil      = res["profil_data"]
 
-    # ── Enrichissement OSM (cols + points d'eau) ───────────────────────────────
-    with st.spinner("Enrichissement avec OpenStreetMap…"):
+    # ── Détection ascensions + points d'eau OSM ────────────────────────────────
+    with st.spinner("Analyse du profil altimétrique et points d'eau…"):
         ascensions = detecter_ascensions(df_profil)
-        ascensions = enrichir_cols(ascensions, points_gpx)
+        # enrichir_cols a été supprimé → on garde juste les ascensions brutes
         points_eau = recuperer_points_eau(points_gpx)
 
     # ── Météo ──────────────────────────────────────────────────────────────────
@@ -107,38 +101,34 @@ def main():
         resultats = enrichir_checkpoints_meteo(checkpoints, date_depart)
         analyse_meteo = analyser_meteo_detaillee(resultats)
 
-        # Infos soleil + UV/pollen (point milieu parcours)
+        # Soleil + UV/pollen (point milieu)
         milieu_lat = sum(p.latitude for p in points_gpx) / len(points_gpx)
         milieu_lon = sum(p.longitude for p in points_gpx) / len(points_gpx)
         date_str = date_depart.strftime("%Y-%m-%d")
         infos_soleil = recuperer_soleil(milieu_lat, milieu_lon, date_str)
         uv_pollen = recuperer_uv_pollen(milieu_lat, milieu_lon, date_str)
 
-    # ── Calculs avancés ────────────────────────────────────────────────────────
+    # ── Score + estimations avancées ───────────────────────────────────────────
     score = calculer_score(dist_tot, d_plus, resultats)
 
-    # Estimation temps cols + calories
     for asc in ascensions:
         mins_col, vit_col = estimer_temps_col(
             asc["_sommet_km"] - asc["_debut_km"], asc["_pente_moy"], vitesse)
-        heure_sommet = date_depart + timedelta(seconds=temps_s) + timedelta(minutes=mins_col)
+        heure_sommet = date_depart + timedelta(minutes=mins_col)  # approximation
         asc["Temps col"]      = f"{mins_col} min ({vit_col} km/h)"
         asc["Arrivée sommet"] = heure_sommet.strftime("%H:%M")
 
-    # Calories
     calories = calculer_calories(dist_tot, d_plus, temps_s, poids)
 
-    # ── Bandeau métriques ─────────────────────────────────────────────────────
+    # ── Affichage ──────────────────────────────────────────────────────────────
     render_metrics_banner(score, dist_tot, d_plus, d_moins, temps_s,
                           vit_moy_reelle, heure_arr, calories)
 
-    # ── Export sidebar ────────────────────────────────────────────────────────
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
                   ref_val, mode, poids, date_dep)
 
-    # ── Onglets ───────────────────────────────────────────────────────────────
     tab_carte, tab_profil, tab_meteo, tab_cols, tab_detail, tab_analyse = st.tabs([
         "🗺️ Carte", "⛰️ Profil & Cols", "🌤️ Météo", "🏔️ Ascensions", "📋 Détail", "🤖 Coach IA"
     ])
@@ -151,7 +141,7 @@ def main():
         render_profile_view(df_profil, ascensions, vitesse, ref_val, mode, poids)
 
     with tab_meteo:
-        render_weather_view(resultats, analyse_meteo, uv_pollen, None)  # err_meteo non défini → None
+        render_weather_view(resultats, analyse_meteo, uv_pollen, None)
 
     with tab_cols:
         render_climbs_view(ascensions, df_profil, vitesse, ref_val, ftp_fc, mode, poids,
