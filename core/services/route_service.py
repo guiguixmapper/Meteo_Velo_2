@@ -1,6 +1,6 @@
 """
 core/services/route_service.py
-Version simplifiée, stable et performante
+Version stable, robuste, sans crash si météo partielle
 """
 
 import gpxpy
@@ -31,6 +31,7 @@ def calculer_parcours(points, vitesse_kmh, date_depart, intervalle_sec):
     dist = d_plus = d_moins = temps = 0.0
     vms = vitesse_kmh * 1000 / 3600
     prochain = 0
+    cap = 0
 
     for i in range(1, len(points)):
         p1, p2 = points[i - 1], points[i]
@@ -71,7 +72,7 @@ def calculer_parcours(points, vitesse_kmh, date_depart, intervalle_sec):
         "d_plus": d_plus,
         "d_moins": d_moins,
         "temps_s": temps,
-        "cap": cap if checkpoints else 0,
+        "cap": cap,
         "checkpoints": checkpoints,
         "profil_data": profil
     }
@@ -123,7 +124,7 @@ def analyser_meteo_detaillee(resultats, dist_tot):
 
 
 # ─────────────────────────────────────────────────────────────
-# SCORE
+# SCORE (CORRIGÉ)
 # ─────────────────────────────────────────────────────────────
 
 def calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids, dist_tot):
@@ -136,7 +137,10 @@ def calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids,
     for c in resultats:
         v = c.get("vent_val", 0)
         p = c.get("pluie_pct", 0)
-        t = c.get("temp_val", 20)
+
+        # 🔒 CORRECTION DÉFINITIVE ICI
+        t = c.get("temp_val") if c.get("temp_val") is not None else 20
+
         e = c.get("effet", "")
 
         temp += abs(t - 20) / 10
