@@ -35,10 +35,22 @@ def render_map_view(points_gpx, resultats, ascensions, points_eau, infos_soleil,
     fond_choisi = st.selectbox("🖼️ Fond de carte", options=list(FONDS_CARTE.keys()), index=0, key="map_fond")
     tiles, attr = FONDS_CARTE[fond_choisi]
 
-    # Cache carte dans session_state
+    # Clé de cache unique par trace + fond choisi
     cache_key = f"carte_{fond_choisi}_{id(points_gpx)}"
+
     if cache_key not in st.session_state:
-        st.session_state[cache_key] = creer_carte(points_gpx, resultats, ascensions,
-                                                   points_eau, tiles, attr)
+        with st.spinner("🗺️ Chargement / mise à jour de la carte…"):
+            st.session_state[cache_key] = creer_carte(
+                points_gpx, resultats, ascensions, points_eau, tiles, attr
+            )
+
     carte = st.session_state[cache_key]
-    st_folium(carte, width="100%", height=700, returned_objects=[])
+
+    # Affichage final (returned_objects=[] → pas d'interaction lourde)
+    st_folium(
+        carte,
+        width="100%",
+        height=700,
+        returned_objects=[],
+        key="folium_map_unique"
+    )
