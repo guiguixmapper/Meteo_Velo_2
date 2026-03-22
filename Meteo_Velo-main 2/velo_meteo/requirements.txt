@@ -1,9 +1,0 @@
-streamlit>=1.40.0
-pandas
-gpxpy
-folium
-streamlit-folium
-plotly
-requests
-google-generativeai
-pytest
