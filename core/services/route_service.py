@@ -8,7 +8,10 @@ import math
 import gpxpy
 import pandas as pd
 from datetime import datetime, timedelta
-from core.utils.geo import calculer_cap, direction_vent_relative
+
+import streamlit as st          # ← ajouté ici
+
+from core.utils.geo import calculer_cap, direction_vent_relative, wind_chill
 from core.services.climbing_service import estimer_watts, get_zone, zones_actives
 
 
