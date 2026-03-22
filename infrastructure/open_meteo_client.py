@@ -59,4 +59,113 @@ def recuperer_meteo_batch(checkpoints_frozen, is_past=False, date_str=None):
     return None
 
 
-# ─────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# EXTRACTION MÉTÉO
+# ─────────────────────────────────────────────────────────────
+
+def extraire_meteo(donnees_api, heure_api):
+    from core.utils.geo import wind_chill
+
+    vide = dict(
+        Ciel="—",
+        temp_val=None,
+        Pluie="—",
+        pluie_pct=None,
+        vent_val=None,
+        rafales_val=None,
+        Dir="—",
+        dir_deg=None,
+        effet="—",
+        ressenti=None,
+    )
+
+    if not donnees_api or "hourly" not in donnees_api:
+        return vide
+
+    heures = donnees_api["hourly"].get("time", [])
+    if heure_api not in heures:
+        return vide
+
+    i = heures.index(heure_api)
+    h = donnees_api["hourly"]
+
+    def val(k):
+        v = h.get(k, [])
+        return v[i] if i < len(v) else None
+
+    temp = val("temperature_2m")
+    vent = val("wind_speed_10m")
+    dir_deg = val("wind_direction_10m")
+
+    pluie_pct = None
+    if "precipitation_probability" in h:
+        pluie_pct = val("precipitation_probability")
+    elif "precipitation" in h:
+        p = val("precipitation") or 0
+        pluie_pct = 100 if p > 0.5 else (50 if p > 0 else 0)
+
+    dirs = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
+    dir_label = dirs[round(dir_deg / 45) % 8] if dir_deg is not None else "—"
+
+    return dict(
+        Ciel=str(val("weathercode")),
+        temp_val=temp,
+        Pluie=f"{pluie_pct}%" if pluie_pct is not None else "—",
+        pluie_pct=pluie_pct,
+        vent_val=vent,
+        rafales_val=val("wind_gusts_10m"),
+        Dir=dir_label,
+        dir_deg=dir_deg,
+        effet="—",
+        ressenti=wind_chill(temp, vent) if temp is not None and vent is not None else None,
+    )
+
+
+# ─────────────────────────────────────────────────────────────
+# SOLEIL & FUSEAU (REQUIS PAR app.py)
+# ─────────────────────────────────────────────────────────────
+
+@st.cache_data(show_spinner=False)
+def recuperer_soleil(lat, lon, date_str):
+    try:
+        r = requests.get(
+            f"https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}&date={date_str}&formatted=0",
+            timeout=10,
+        )
+        r.raise_for_status()
+        d = r.json().get("results", {})
+        return {
+            "lever": datetime.fromisoformat(d["sunrise"]),
+            "coucher": datetime.fromisoformat(d["sunset"]),
+        }
+    except Exception:
+        return None
+
+
+@st.cache_data(show_spinner=False)
+def recuperer_fuseau(lat, lon):
+    try:
+        r = requests.get(
+            f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+            "&current=temperature_2m&timezone=auto",
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json().get("timezone", "UTC")
+    except Exception:
+        return "UTC"
+
+
+# ─────────────────────────────────────────────────────────────
+# UV / POLLEN (STUB — POUR COMPATIBILITÉ)
+# ─────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=CACHE_METEO_TTL, show_spinner=False)
+def recuperer_uv_pollen(lat, lon, date_str):
+    return {
+        "uv_max": None,
+        "uv_emoji": "—",
+        "uv_label": "Données indisponibles",
+        "uv_couleur": "#9ca3af",
+        "pollens": [],
+    }
