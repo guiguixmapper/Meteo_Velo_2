@@ -9,7 +9,10 @@ import gpxpy
 import pandas as pd
 from datetime import datetime, timedelta
 
-import streamlit as st          # ← ajouté ici
+import streamlit as st
+
+# Ajout des imports manquants pour que memoire_meteo puisse appeler recuperer_meteo_batch
+from infrastructure.open_meteo_client import recuperer_meteo_batch
 
 from core.utils.geo import calculer_cap, direction_vent_relative, wind_chill
 from core.services.climbing_service import estimer_watts, get_zone, zones_actives
@@ -28,7 +31,6 @@ def calculer_parcours(points_gpx: list, vitesse_plat_kmh: float,
                       date_depart: datetime, intervalle_sec: int) -> dict:
     """
     Calcule les statistiques du parcours et génère les checkpoints.
-    Retourne un dict avec dist_tot, d_plus, d_moins, temps_s, checkpoints, profil_data.
     """
     checkpoints, profil_data = [], []
     dist_tot = d_plus = d_moins = temps_s = prochain = cap = 0.0
@@ -122,7 +124,7 @@ def analyser_meteo_detaillee(resultats: list) -> dict:
         "pct_face":     pct_face,
         "pct_dos":      pct_dos,
         "pct_cote":     pct_cote,
-        "segments_face": [],  # à implémenter si besoin
+        "segments_face": [],
         "pct_pluie":    round(len(pluie_sign)/len(resultats)*100) if resultats else 0,
         "premier_pluie": premier_pluie,
     }
@@ -131,10 +133,8 @@ def analyser_meteo_detaillee(resultats: list) -> dict:
 def calculer_score(dist_tot: float, d_plus: float, resultats: list) -> dict:
     """Calcule le score global de la sortie (0–10)."""
     dist_km = dist_tot / 1000
-    # Coût route (distance + dénivelé)
     cout_route = (dist_km / 100.0) + (d_plus / 2000.0)
 
-    # Pénalité Météo
     total_aero = total_roulement = total_thermique = 0.0
     nb_cp = max(1, len(resultats))
 
@@ -152,7 +152,7 @@ def calculer_score(dist_tot: float, d_plus: float, resultats: list) -> dict:
         elif "Côté" in effet:
             total_aero += (v ** 2) / 600.0
         elif "Dos" in effet:
-            total_aero -= (v ** 2) / 400.0  # bonus
+            total_aero -= (v ** 2) / 400.0
 
     cout_meteo = (total_aero + total_roulement + total_thermique) / nb_cp
 
