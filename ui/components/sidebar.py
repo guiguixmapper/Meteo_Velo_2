@@ -10,7 +10,9 @@ from config.settings import (
     SENSIBILITE_LABELS, SENSIBILITE_PARAMS,
     SEUIL_DEBUT, SEUIL_FIN, MAX_DESCENTE_FUSION_M,
 )
-import core.services.climbing_service as climbing_module
+# CORRECTIF thread-safety : on n'importe plus le module pour muter ses attributs.
+# Les paramètres de détection sont maintenant passés explicitement à
+# detecter_ascensions() dans app.py via st.session_state.
 
 
 def render_sidebar():
@@ -103,9 +105,9 @@ def render_sidebar():
             st.slider("Seuil fin (%)",    0.0, 3.0, step=0.5, key="seuil_fin")
             st.slider("Fusion (D− max, m)", 10, 200, step=10,  key="fusion_m")
 
-        climbing_module.SEUIL_DEBUT           = st.session_state.seuil_debut
-        climbing_module.SEUIL_FIN             = st.session_state.seuil_fin
-        climbing_module.MAX_DESCENTE_FUSION_M = st.session_state.fusion_m
+        # CORRECTIF thread-safety : les paramètres de détection sont désormais
+        # lus depuis st.session_state directement dans app.py et passés
+        # explicitement à detecter_ascensions(). On ne mute plus le module.
 
     # ── Options avancées ──────────────────────────────────────────────────────
     with st.sidebar.expander("🔧 Options avancées", expanded=False):
