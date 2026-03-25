@@ -2,12 +2,14 @@
 app.py — Point d'entrée unique
 ================================
 Vélo & Météo — Analyse de tracé GPX.
+Ce fichier ne contient QUE le bootstrap et l'orchestration.
+Toute la logique est dans core/, infrastructure/ et ui/.
 """
 
 import streamlit as st
 import pandas as pd
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_cls
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,104 +35,222 @@ from core.services.climbing_service import (
 from infrastructure.open_meteo_client import (
     recuperer_fuseau, recuperer_soleil, recuperer_uv_pollen, recuperer_meteo_batch,
 )
-from infrastructure.osm_client import recuperer_points_eau
+from infrastructure.osm_client import enrichir_cols, recuperer_points_eau
 from config.settings import MAX_CHECKPOINTS_METEO
 
 
-# ── Cache météo ────────────────────────────────────────────────────────────────
+# ── Cache météo avec retry ─────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def memoire_meteo(frozen):
-    latitudes  = [cp[0] for cp in frozen]
-    longitudes = [cp[1] for cp in frozen]
-    dates_iso  = [cp[2] for cp in frozen]
-    return recuperer_meteo_batch(latitudes, longitudes, dates_iso)
+def memoire_meteo(frozen, is_past=False, date_str=None):
+    return recuperer_meteo_batch(frozen, is_past=is_past, date_str=date_str)
 
+
+# ==============================================================================
+# MAIN
+# ==============================================================================
 
 def main():
     st.set_page_config(page_title="Vélo & Météo", page_icon="🚴‍♂️", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
 
     # ── Sidebar ────────────────────────────────────────────────────────────────
-    sidebar_params = render_sidebar()
+    params = render_sidebar()
+    fichier        = params["fichier"]
+    date_dep       = params["date_dep"]
+    heure_dep      = params["heure_dep"]
+    vitesse        = params["vitesse"]
+    mode           = params["mode"]
+    ref_val        = params["ref_val"]
+    poids          = params["poids"]
+    ftp_fc         = params["ftp_fc"]
+    intervalle     = params["intervalle"]
+    intervalle_sec = params["intervalle_sec"]
+    noms_osm       = params["noms_osm"]
+    gemini_key     = params["gemini_key"]
+    ph_fuseau      = params["ph_fuseau"]
+    ph_export      = params["ph_export"]
 
-    fichier     = sidebar_params["fichier"]
-    date_dep    = sidebar_params["date_dep"]
-    heure_dep   = sidebar_params["heure_dep"]
-    vitesse     = sidebar_params["vitesse"]
-    mode        = sidebar_params["mode"]
-    ref_val     = sidebar_params["ref_val"]
-    poids       = sidebar_params["poids"]
-    fc_max      = sidebar_params["fc_max"]
-    ftp_fc      = sidebar_params["ftp_fc"]
-    intervalle  = sidebar_params["intervalle"]
-    intervalle_sec = sidebar_params["intervalle_sec"]
-    noms_osm    = sidebar_params["noms_osm"]
-    gemini_key  = sidebar_params["gemini_key"]
-    ph_fuseau   = sidebar_params["ph_fuseau"]
-    ph_export   = sidebar_params["ph_export"]
-
-    if not fichier:
-        st.info("👈 Chargez un fichier GPX pour commencer l'analyse.")
+    # ── Page d'accueil ─────────────────────────────────────────────────────────
+    if fichier is None:
+        st.markdown("""
+        <div style="text-align:center;padding:60px 20px;color:#9ca3af">
+          <div style="font-size:3rem;margin-bottom:12px">🗺️</div>
+          <div style="font-size:1rem;font-weight:600;color:#374151;margin-bottom:6px">Importez un fichier GPX</div>
+          <div style="font-size:0.83rem">Déposez votre trace dans le panneau de gauche pour démarrer l'analyse.</div>
+        </div>""", unsafe_allow_html=True)
         return
 
-    # ── Lecture GPX ────────────────────────────────────────────────────────────
-    with st.spinner("Lecture du fichier GPX…"):
-        points_gpx = parser_gpx(fichier.getvalue())
-        if not points_gpx:
-            st.error("Impossible de lire le fichier GPX. Vérifiez qu'il est valide.")
-            return
+    st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
 
-    # ── Calcul parcours de base ────────────────────────────────────────────────
+    # ── Chargement GPX ─────────────────────────────────────────────────────────
+    # CORRECTIF #1 : lire le fichier une seule fois et le stocker en session_state.
+    # fichier.read() consomme le stream — les re-runs suivants retourneraient b"".
+    _gpx_key = f"gpx_raw_{fichier.file_id}"
+    if _gpx_key not in st.session_state:
+        st.session_state[_gpx_key] = fichier.read()
+
+    etapes = st.empty()
+    with etapes.container():
+        with st.spinner("📍 Lecture du fichier GPX…"):
+            points_gpx = parser_gpx(st.session_state[_gpx_key])
+
+    if not points_gpx:
+        st.error("❌ Fichier GPX vide ou corrompu.")
+        return
+
+    # ── Fuseau horaire ─────────────────────────────────────────────────────────
+    with etapes.container():
+        with st.spinner("🌍 Fuseau horaire…"):
+            fuseau = recuperer_fuseau(points_gpx[0].latitude, points_gpx[0].longitude)
+    ph_fuseau.success(f"🌍 **{fuseau}**")
     date_depart = datetime.combine(date_dep, heure_dep)
-    res = calculer_parcours(points_gpx, vitesse, date_depart, intervalle_sec)
 
-    dist_tot       = res["dist_tot"]
-    d_plus         = res["d_plus"]
-    d_moins        = res["d_moins"]
-    temps_s        = res["temps_s"]
-    vit_moy_reelle = res["vit_moy_reelle"]
-    heure_arr      = res["heure_arr"]
-    checkpoints    = res["checkpoints"]
-    df_profil      = res["profil_data"]
+    # ── Soleil ─────────────────────────────────────────────────────────────────
+    with etapes.container():
+        with st.spinner("🌅 Lever/coucher du soleil…"):
+            infos_soleil = recuperer_soleil(
+                points_gpx[0].latitude, points_gpx[0].longitude,
+                date_dep.strftime("%Y-%m-%d"))
 
-    # ── Détection ascensions + points d'eau OSM ────────────────────────────────
-    with st.spinner("Analyse du profil altimétrique et points d'eau…"):
-        ascensions = detecter_ascensions(df_profil)
-        points_eau = recuperer_points_eau(points_gpx)
+    # ── UV & Pollen ────────────────────────────────────────────────────────────
+    with etapes.container():
+        with st.spinner("🌞 UV & Pollen…"):
+            uv_pollen = recuperer_uv_pollen(
+                points_gpx[0].latitude, points_gpx[0].longitude,
+                date_dep.strftime("%Y-%m-%d"))
 
-    # ── Météo ──────────────────────────────────────────────────────────────────
-    with st.spinner("Récupération des données météo…"):
-        resultats = enrichir_checkpoints_meteo(checkpoints, date_depart)
-        analyse_meteo = analyser_meteo_detaillee(resultats)
+    # ── Calcul parcours (mis en cache) ─────────────────────────────────────────
+    _key = f"parcours_{fichier.file_id}_{vitesse}_{intervalle}_{date_depart}"
+    if _key not in st.session_state:
+        with etapes.container():
+            with st.spinner("📐 Calcul du parcours…"):
+                res = calculer_parcours(points_gpx, vitesse, date_depart, intervalle_sec)
+        st.session_state[_key] = res
 
-        milieu_lat = sum(p.latitude for p in points_gpx) / len(points_gpx)
-        milieu_lon = sum(p.longitude for p in points_gpx) / len(points_gpx)
-        date_str = date_depart.strftime("%Y-%m-%d")
-        infos_soleil = recuperer_soleil(milieu_lat, milieu_lon, date_str)
-        uv_pollen = recuperer_uv_pollen(milieu_lat, milieu_lon, date_str)
+    res         = st.session_state[_key]
+    # CORRECTIF #2 : on travaille sur une COPIE de la liste pour ne jamais muter
+    # le session_state — sinon le checkpoint d'arrivée se duplique à chaque re-run.
+    checkpoints = list(res["checkpoints"])
+    profil_data = res["profil_data"]
+    dist_tot    = res["dist_tot"]
+    d_plus      = res["d_plus"]
+    d_moins     = res["d_moins"]
+    temps_s     = res["temps_s"]
+    cap         = res["cap"]
 
-    # ── Score + estimations avancées ───────────────────────────────────────────
-    score = calculer_score(dist_tot, d_plus, resultats)
+    vit_moy_reelle = round((dist_tot / 1000) / (temps_s / 3600), 1) if temps_s > 0 else vitesse
+    heure_arr      = date_depart + timedelta(seconds=temps_s)
+
+    # Checkpoint d'arrivée — ajouté sur la copie locale, pas sur le session_state
+    pf = points_gpx[-1]
+    checkpoints.append({
+        "lat": pf.latitude, "lon": pf.longitude, "Cap": cap,
+        "Heure": heure_arr.strftime("%d/%m %H:%M") + " 🏁",
+        "Heure_API": heure_arr.replace(minute=0, second=0).strftime("%Y-%m-%dT%H:00"),
+        "Km": round(dist_tot / 1000, 1),
+        "Alt (m)": int(pf.elevation) if pf.elevation else 0,
+    })
+    df_profil = pd.DataFrame(profil_data)
+
+    # ── Détection ascensions ───────────────────────────────────────────────────
+    with etapes.container():
+        with st.spinner("⛰️ Détection des ascensions…"):
+            ascensions = detecter_ascensions(df_profil)
+
+    if ascensions:
+        dist_cum, pt_par_km = 0.0, {}
+        for i in range(1, len(points_gpx)):
+            p1, p2 = points_gpx[i-1], points_gpx[i]
+            dist_cum += p1.distance_2d(p2) or 0.0
+            pt_par_km[round(dist_cum / 1000, 3)] = p2
+
+        def coords_au_km(km_cible):
+            if not pt_par_km: return None, None
+            km_proche = min(pt_par_km.keys(), key=lambda k: abs(k - km_cible))
+            pt = pt_par_km[km_proche]
+            return pt.latitude, pt.longitude
+
+        for asc in ascensions:
+            asc["_lat_sommet"], asc["_lon_sommet"] = coords_au_km(asc["_sommet_km"])
+            asc["_lat_debut"],  asc["_lon_debut"]  = coords_au_km(asc["_debut_km"])
+
+    # ── Noms OSM ──────────────────────────────────────────────────────────────
+    if noms_osm and ascensions:
+        with etapes.container():
+            with st.spinner("🗺️ Noms des cols (OpenStreetMap)…"):
+                ascensions = enrichir_cols(ascensions, points_gpx)
+    for asc in ascensions:
+        asc.setdefault("Nom", "—")
+        asc.setdefault("Nom OSM alt", None)
+
+    # ── Points d'eau ──────────────────────────────────────────────────────────
+    with etapes.container():
+        with st.spinner("💧 Recherche des points d'eau…"):
+            coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
+            points_eau   = recuperer_points_eau(coords_tuple)
+
+    # ── Météo ─────────────────────────────────────────────────────────────────
+    with etapes.container():
+        with st.spinner("📡 Récupération météo…"):
+            cps_meteo = checkpoints[::max(1, len(checkpoints)//MAX_CHECKPOINTS_METEO)] \
+                        if len(checkpoints) > MAX_CHECKPOINTS_METEO else checkpoints
+            frozen    = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in cps_meteo)
+
+            # CORRECTIF #3 : utiliser date_cls.today() — datetime est déjà importé,
+            # plus besoin du hack __import__('datetime').
+            is_past   = date_dep < date_cls.today()
+            rep_list  = memoire_meteo(frozen, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
+
+            # CORRECTIF #4 : interpolation météo basée sur le km (valeur stable),
+            # et non sur id() qui change à chaque re-run Python.
+            if rep_list and len(cps_meteo) < len(checkpoints):
+                km_to_idx = {cp["Km"]: i for i, cp in enumerate(cps_meteo)}
+                km_list   = sorted(km_to_idx.keys())
+                rep_full  = []
+                for cp in checkpoints:
+                    # Trouver le checkpoint météo le plus proche par km
+                    closest_km = min(km_list, key=lambda k: abs(k - cp["Km"]))
+                    j = km_to_idx[closest_km]
+                    rep_full.append(rep_list[j] if j < len(rep_list) else {})
+                rep_list = rep_full
+
+    etapes.empty()
+
+    err_meteo = rep_list is None
+    if err_meteo:
+        st.warning("⚠️ Météo indisponible (429). Patientez 1-2 minutes et rechargez.")
+        resultats = [{**cp, "Ciel":"—","temp_val":None,"Pluie":"—","pluie_pct":None,
+                      "vent_val":None,"rafales_val":None,"Dir":"—","dir_deg":None,
+                      "effet":"—","ressenti":None} for cp in checkpoints]
+    else:
+        resultats = enrichir_checkpoints_meteo(checkpoints, rep_list)
+
+    # ── Score + métriques ─────────────────────────────────────────────────────
+    # Note : poids-10 modélise le poids cycliste sans le vélo (~10 kg).
+    # La valeur 10 est une approximation raisonnable mais non paramétrable.
+    calories      = calculer_calories(max(1, poids - 10), temps_s, dist_tot, d_plus, vitesse)
+    score         = calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids)
+    analyse_meteo = analyser_meteo_detaillee(resultats, dist_tot)
 
     for asc in ascensions:
+        temps_debut = (asc["_debut_km"] / vitesse) * 3600
         mins_col, vit_col = estimer_temps_col(
             asc["_sommet_km"] - asc["_debut_km"], asc["_pente_moy"], vitesse)
-        heure_sommet = date_depart + timedelta(minutes=mins_col)
+        heure_sommet = date_depart + timedelta(seconds=temps_debut) + timedelta(minutes=mins_col)
         asc["Temps col"]      = f"{mins_col} min ({vit_col} km/h)"
         asc["Arrivée sommet"] = heure_sommet.strftime("%H:%M")
 
-    # Correction ici : on passe 'vitesse' en 5e argument
-    calories = calculer_calories(dist_tot, d_plus, temps_s, poids, vitesse)
-
-    # ── Affichage ──────────────────────────────────────────────────────────────
+    # ── Bandeau métriques ─────────────────────────────────────────────────────
     render_metrics_banner(score, dist_tot, d_plus, d_moins, temps_s,
                           vit_moy_reelle, heure_arr, calories)
 
+    # ── Export sidebar ────────────────────────────────────────────────────────
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
                   ref_val, mode, poids, date_dep)
 
+    # ── Onglets ───────────────────────────────────────────────────────────────
     tab_carte, tab_profil, tab_meteo, tab_cols, tab_detail, tab_analyse = st.tabs([
         "🗺️ Carte", "⛰️ Profil & Cols", "🌤️ Météo", "🏔️ Ascensions", "📋 Détail", "🤖 Coach IA"
     ])
@@ -143,7 +263,7 @@ def main():
         render_profile_view(df_profil, ascensions, vitesse, ref_val, mode, poids)
 
     with tab_meteo:
-        render_weather_view(resultats, analyse_meteo, uv_pollen, None)
+        render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo)
 
     with tab_cols:
         render_climbs_view(ascensions, df_profil, vitesse, ref_val, ftp_fc, mode, poids,
