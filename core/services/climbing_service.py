@@ -62,22 +62,16 @@ def calculer_vam(ftp_w: float, poids_kg: float) -> float:
     Calcule la VAM (Vélocité Ascensionale Moyenne) en m/h depuis le FTP.
 
     Formule empirique calibrée sur des données réelles cyclistes :
-        VAM = FTP_wkg × 170 + 50
-    
+        VAM = FTP_wkg × 240
+
     Exemples :
-        2.5 W/kg → 475 m/h  (débutant)
-        3.0 W/kg → 560 m/h  (loisir)
-        3.5 W/kg → 645 m/h  (cyclosportif)
-        4.0 W/kg → 730 m/h  (bon niveau)
-        4.5 W/kg → 815 m/h  (compétiteur)
-        5.0 W/kg → 900 m/h  (élite)
+        3.0 W/kg → 720 m/h  (~89min Alpe d'Huez)
+        4.0 W/kg → 960 m/h  (~67min Alpe d'Huez)
+        5.0 W/kg → 1200 m/h (élite)
     """
     if poids_kg <= 0 or ftp_w <= 0:
         return 600.0  # valeur par défaut cycliste moyen
     ftp_wkg = ftp_w / poids_kg
-    # Formule calibrée sur données réelles (Alpe d'Huez, cols UCI) :
-    # VAM = W/kg × 240
-    # Exemples : 3 W/kg → 720 m/h (~89min AdH), 4 W/kg → 960 m/h (~67min AdH)
     vam = ftp_wkg * 240
     return round(max(300, min(1800, vam)), 0)  # bornes réalistes
 
@@ -102,14 +96,11 @@ def estimer_temps_col_vam(d_plus_m: float, dist_km: float,
         - vam       : VAM utilisée (m/h)
         - vit_moy   : vitesse moyenne en montée (km/h)
         - niveau    : label niveau cycliste
-        - vs_simple : delta vs l'ancienne méthode simpliste (minutes)
     """
     vam = calculer_vam(ftp_w, poids_kg)
-    # Temps = D+ / VAM en heures → minutes
-    temps_h   = d_plus_m / vam
-    mins      = int(temps_h * 60)
-    # Vitesse moyenne = distance / temps
-    vit_moy   = round(dist_km / temps_h, 1) if temps_h > 0 else 0
+    temps_h = d_plus_m / vam
+    mins    = int(temps_h * 60)
+    vit_moy = round(dist_km / temps_h, 1) if temps_h > 0 else 0
 
     return dict(
         mins=max(1, mins),
@@ -170,33 +161,46 @@ def _lisser(alts: list, f: int = LISSAGE_F) -> list:
 
 
 def _calc_pentes(dists: list, alts: list, fenetre_m: float = FENETRE_PENTE_M) -> list:
+    """
+    Calcule les pentes glissantes sur une fenêtre de fenetre_m mètres.
+
+    CORRECTIF PERFORMANCE : algorithme O(n) avec pointeur gauche glissant,
+    remplace la double boucle imbriquée O(n²) qui gelait l'UI sur les
+    fichiers GPX de > 5 000 points.
+    """
     n      = len(dists)
     pentes = [0.0] * n
+    j      = 0  # pointeur gauche de la fenêtre
     for i in range(1, n):
-        for j in range(i - 1, -1, -1):
-            dist_m = (dists[i] - dists[j]) * 1000
-            if dist_m >= fenetre_m:
-                pentes[i] = (alts[i] - alts[j]) / dist_m * 100
-                break
-            if j == 0:
-                dist_m = (dists[i] - dists[0]) * 1000
-                if dist_m > 0:
-                    pentes[i] = (alts[i] - alts[0]) / dist_m * 100
+        # Avancer j tant qu'on peut réduire la fenêtre sans passer sous fenetre_m
+        while j < i - 1 and (dists[i] - dists[j + 1]) * 1000 >= fenetre_m:
+            j += 1
+        dist_m = (dists[i] - dists[j]) * 1000
+        if dist_m > 0:
+            pentes[i] = (alts[i] - alts[j]) / dist_m * 100
     return pentes
 
 
-def _detecter_runs(dists: list, alts: list, pentes: list) -> list:
+def _detecter_runs(dists: list, alts: list, pentes: list,
+                   seuil_debut: float = SEUIL_DEBUT,
+                   seuil_fin: float = SEUIL_FIN) -> list:
+    """
+    Détecte les séquences de points en montée.
+
+    CORRECTIF : utilise maintenant seuil_fin pour terminer une montée,
+    créant un effet d'hystérésis (démarre à seuil_debut, s'arrête à seuil_fin).
+    Avant ce correctif, seuil_fin était modifiable dans la sidebar mais
+    n'avait aucun effet sur l'algorithme.
+    """
     n, runs, debut = len(dists), [], None
     for i in range(n):
-        if pentes[i] >= SEUIL_DEBUT:
-            if debut is None:
-                debut = i
-        else:
-            if debut is not None:
-                dist_run = (dists[i - 1] - dists[debut]) * 1000
-                if dist_run >= MIN_RUN_M:
-                    runs.append((debut, i - 1))
-                debut = None
+        if debut is None and pentes[i] >= seuil_debut:
+            debut = i
+        elif debut is not None and pentes[i] < seuil_fin:
+            dist_run = (dists[i - 1] - dists[debut]) * 1000
+            if dist_run >= MIN_RUN_M:
+                runs.append((debut, i - 1))
+            debut = None
     if debut is not None:
         dist_run = (dists[-1] - dists[debut]) * 1000
         if dist_run >= MIN_RUN_M:
@@ -204,7 +208,8 @@ def _detecter_runs(dists: list, alts: list, pentes: list) -> list:
     return runs
 
 
-def _fusionner_runs(runs: list, dists: list, alts: list) -> list:
+def _fusionner_runs(runs: list, dists: list, alts: list,
+                    max_descente: float = MAX_DESCENTE_FUSION_M) -> list:
     if not runs:
         return []
     fusionnes = [list(runs[0])]
@@ -212,7 +217,7 @@ def _fusionner_runs(runs: list, dists: list, alts: list) -> list:
         prev_debut, prev_fin = fusionnes[-1]
         alt_vallee = min(alts[prev_fin:debut + 1])
         descente   = alts[prev_fin] - alt_vallee
-        if descente < MAX_DESCENTE_FUSION_M:
+        if descente < max_descente:
             fusionnes[-1][1] = fin
         else:
             fusionnes.append([debut, fin])
@@ -236,10 +241,17 @@ def _pente_max(dists: list, alts: list, i0: int, i1: int, fenetre_m: float = 100
 # FONCTION PRINCIPALE
 # ==============================================================================
 
-def detecter_ascensions(df: pd.DataFrame) -> list:
+def detecter_ascensions(df: pd.DataFrame,
+                        seuil_debut: float = SEUIL_DEBUT,
+                        seuil_fin: float = SEUIL_FIN,
+                        max_descente: float = MAX_DESCENTE_FUSION_M) -> list:
     """
     Détecte et catégorise les ascensions dans un profil altimétrique.
     Retourne une liste de dicts compatibles avec l'UI existante.
+
+    Les paramètres seuil_debut, seuil_fin, max_descente permettent un
+    ajustement par session sans mutation des constantes du module
+    (CORRECTIF thread-safety : plus de climbing_module.SEUIL_DEBUT = ...).
     """
     if df.empty or len(df) < 5:
         return []
@@ -248,8 +260,9 @@ def detecter_ascensions(df: pd.DataFrame) -> list:
     dists    = df["Distance (km)"].tolist()
     alts     = _lisser(alts_raw)
     pentes   = _calc_pentes(dists, alts)
-    runs     = _detecter_runs(dists, alts, pentes)
-    runs     = _fusionner_runs(runs, dists, alts)
+    runs     = _detecter_runs(dists, alts, pentes,
+                              seuil_debut=seuil_debut, seuil_fin=seuil_fin)
+    runs     = _fusionner_runs(runs, dists, alts, max_descente=max_descente)
 
     ascensions = []
     for (i0, i1) in runs:
