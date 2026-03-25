@@ -6,8 +6,26 @@ Génération du carnet de route HTML/PDF.
 
 import base64
 import re
+import html as html_lib
 from datetime import datetime
 from ui.components.profile_view import creer_figure_profil, creer_figure_col
+
+
+def _sanitiser_briefing(texte: str) -> str:
+    """
+    Sanitise le texte Gemini avant injection dans le HTML exporté.
+    CORRECTIF XSS : on échappe d'abord tout le HTML, puis on réapplique
+    uniquement le gras Markdown et les sauts de ligne — rien d'autre.
+    Ainsi, même si Gemini renvoie <script> ou <img onerror=...>, ces
+    balises seront affichées comme du texte inoffensif.
+    """
+    # 1. Échapper tous les caractères HTML spéciaux
+    safe = html_lib.escape(texte)
+    # 2. Reconvertir uniquement **gras** → <b>gras</b>
+    safe = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', safe)
+    # 3. Sauts de ligne
+    safe = safe.replace('\n', '<br>')
+    return safe
 
 
 def generer_html_resume(score, ascensions, resultats, dist_tot, d_plus, d_moins,
@@ -51,10 +69,11 @@ def generer_html_resume(score, ascensions, resultats, dist_tot, d_plus, d_moins,
             if fig_col:
                 html_profils_cols += fig_col.to_html(full_html=False, include_plotlyjs=False)
 
+    # CORRECTIF XSS : le briefing Gemini est sanitisé avant injection.
     html_briefing = ""
     if briefing_ia:
-        texte = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', briefing_ia).replace('\n', '<br>')
-        html_briefing = f'<h2>🎙️ Le Briefing du Coach IA</h2><div class="ia-box">{texte}</div>'
+        texte_safe = _sanitiser_briefing(briefing_ia)
+        html_briefing = f'<h2>🎙️ Le Briefing du Coach IA</h2><div class="ia-box">{texte_safe}</div>'
 
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Roadbook Velo</title>
