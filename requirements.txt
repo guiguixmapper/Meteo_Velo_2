@@ -6,4 +6,3 @@ streamlit-folium
 plotly
 requests
 google-generativeai
-pytest
