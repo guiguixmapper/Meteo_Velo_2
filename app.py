@@ -120,7 +120,12 @@ def main():
                 date_dep.strftime("%Y-%m-%d"))
 
     # ── Calcul parcours (mis en cache) ─────────────────────────────────────────
-    _key = f"parcours_{fichier.file_id}_{vitesse}_{intervalle}_{date_depart}"
+    _key = f"parcours_v2_{fichier.file_id}_{vitesse}_{intervalle}_{date_depart}"
+    # "v2" dans la clé invalide tout cache de l'ancienne version (sans "cap").
+    # Si le cache existe mais est incomplet (migration), on le supprime.
+    if _key in st.session_state and "cap" not in st.session_state[_key]:
+        del st.session_state[_key]
+
     if _key not in st.session_state:
         with etapes.container():
             with st.spinner("📐 Calcul du parcours…"):
