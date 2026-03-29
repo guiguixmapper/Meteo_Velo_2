@@ -107,7 +107,7 @@ OSM_TYPES_PRIORITE = {
 # MÉTÉO
 # ==============================================================================
 
-MAX_CHECKPOINTS_METEO = 50   # limite pour éviter les 429 Open-Meteo
+MAX_CHECKPOINTS_METEO = 100   # limite pour éviter les 429 Open-Meteo
 CACHE_METEO_TTL       = 3600  # 1 heure
 CACHE_OSM_TTL         = 86400 # 24 heures
 RETRY_METEO_DELAYS    = [2, 5, 12]
