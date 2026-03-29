@@ -41,7 +41,8 @@ from config.settings import MAX_CHECKPOINTS_METEO
 
 # ── Cache météo avec retry ─────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def memoire_meteo(frozen, is_past=False, date_str=None):
+def memoire_meteo(frozen, is_past=False, date_str=None, _v=2):
+    # _v=2 : invalide le cache de l'ancienne version (sans ce paramètre)
     return recuperer_meteo_batch(frozen, is_past=is_past, date_str=date_str)
 
 
