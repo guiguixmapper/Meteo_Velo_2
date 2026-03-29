@@ -197,34 +197,14 @@ def main():
     # ── Météo ─────────────────────────────────────────────────────────────────
     with etapes.container():
         with st.spinner("📡 Récupération météo…"):
-            if len(checkpoints) > MAX_CHECKPOINTS_METEO:
-                pas = max(1, len(checkpoints) // MAX_CHECKPOINTS_METEO)
-                cps_meteo = checkpoints[::pas]
-                # S'assurer que le dernier checkpoint est toujours inclus
-                # pour éviter les marqueurs manquants en fin de parcours.
-                if cps_meteo[-1] is not checkpoints[-1]:
-                    cps_meteo = cps_meteo + [checkpoints[-1]]
-            else:
-                cps_meteo = checkpoints
-            frozen    = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in cps_meteo)
-
-            # CORRECTIF #3 : utiliser date_cls.today() — datetime est déjà importé,
-            # plus besoin du hack __import__('datetime').
-            is_past   = date_dep < date_cls.today()
-            rep_list  = memoire_meteo(frozen, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
-
-            # CORRECTIF #4 : interpolation météo basée sur le km (valeur stable),
-            # et non sur id() qui change à chaque re-run Python.
-            if rep_list and len(cps_meteo) < len(checkpoints):
-                km_to_idx = {cp["Km"]: i for i, cp in enumerate(cps_meteo)}
-                km_list   = sorted(km_to_idx.keys())
-                rep_full  = []
-                for cp in checkpoints:
-                    # Trouver le checkpoint météo le plus proche par km
-                    closest_km = min(km_list, key=lambda k: abs(k - cp["Km"]))
-                    j = km_to_idx[closest_km]
-                    rep_full.append(rep_list[j] if j < len(rep_list) else {})
-                rep_list = rep_full
+            # On envoie tous les checkpoints à l'API sans sous-échantillonnage.
+            # Open-Meteo batch supporte jusqu'à ~1000 locations — on n'a jamais
+            # autant de checkpoints même sur un ultra de 300 km à 5 min d'intervalle.
+            # Le sous-échantillonnage était la cause des marqueurs manquants
+            # en fin de parcours.
+            frozen   = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in checkpoints)
+            is_past  = date_dep < date_cls.today()
+            rep_list = memoire_meteo(frozen, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
 
     etapes.empty()
 
