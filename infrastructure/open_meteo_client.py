@@ -116,10 +116,24 @@ def extraire_meteo(donnees_api: dict, heure_api: str) -> dict:
         return vide
 
     heures = donnees_api["hourly"].get("time", [])
-    if heure_api not in heures:
+    if not heures:
         return vide
 
-    idx = heures.index(heure_api)
+    # Correspondance exacte d'abord (cas normal)
+    if heure_api in heures:
+        idx = heures.index(heure_api)
+    else:
+        # Fallback : heure la plus proche disponible dans la réponse API.
+        # Evite les marqueurs manquants sur la carte quand l'heure exacte
+        # ne figure pas dans la liste retournée par Open-Meteo.
+        try:
+            from datetime import datetime as _dt
+            cible = _dt.fromisoformat(heure_api)
+            idx = min(range(len(heures)),
+                      key=lambda i: abs((_dt.fromisoformat(heures[i]) - cible).total_seconds()))
+        except Exception:
+            return vide
+
     h   = donnees_api["hourly"]
 
     def sg(key, default=None):
