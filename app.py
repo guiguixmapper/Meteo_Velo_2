@@ -243,7 +243,7 @@ def main():
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
-                  ref_val, mode, poids, date_dep)
+                  ref_val, mode, poids, date_dep, df_profil_carte=df_profil)
 
     # ── Onglets ───────────────────────────────────────────────────────────────
     tab_carte, tab_profil, tab_meteo, tab_cols, tab_detail, tab_analyse = st.tabs([
@@ -252,7 +252,7 @@ def main():
 
     with tab_carte:
         render_map_view(points_gpx, resultats, ascensions, points_eau,
-                        infos_soleil, date_depart, heure_arr)
+                        infos_soleil, date_depart, heure_arr, df_profil=df_profil)
 
     with tab_profil:
         render_profile_view(df_profil, ascensions, vitesse, ref_val, mode, poids)
