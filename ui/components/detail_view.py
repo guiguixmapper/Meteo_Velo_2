@@ -29,8 +29,15 @@ def render_detail_view(resultats, intervalle):
             "Direction":   cp.get("Dir", "—"),
             "Effet vent":  cp.get("effet", "—"),
         })
+
+    # Hauteur dynamique : 56px header + 35px par ligne, sans plafond arbitraire.
+    # On laisse le tableau s'étendre jusqu'à 2000px max pour les longues sorties
+    # (intervalle 5 min sur 200+ km = ~80 lignes = ~2856px sans plafond).
+    # Au-delà de 2000px, Streamlit scrolle nativement dans le composant.
+    hauteur = min(2000, 56 + 35 * len(lignes))
+
     st.dataframe(pd.DataFrame(lignes), width='stretch', hide_index=True, key="detail_df",
-                 height=min(800, 56 + 35 * len(lignes)),
+                 height=hauteur,
         column_config={
             "Heure":       st.column_config.TextColumn("🕐 Heure"),
             "Km":          st.column_config.NumberColumn("📏 Km"),
