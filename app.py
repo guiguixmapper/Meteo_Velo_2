@@ -198,14 +198,37 @@ def main():
     # ── Météo ─────────────────────────────────────────────────────────────────
     with etapes.container():
         with st.spinner("📡 Récupération météo…"):
-            # On envoie tous les checkpoints à l'API sans sous-échantillonnage.
-            # Open-Meteo batch supporte jusqu'à ~1000 locations — on n'a jamais
-            # autant de checkpoints même sur un ultra de 300 km à 5 min d'intervalle.
-            # Le sous-échantillonnage était la cause des marqueurs manquants
-            # en fin de parcours.
-            frozen   = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in checkpoints)
-            is_past  = date_dep < date_cls.today()
-            rep_list = memoire_meteo(frozen, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
+            is_past = date_dep < date_cls.today()
+            # Stratégie : une requête par heure unique × tous les points du tracé.
+            # Le rate limiter Open-Meteo compte chaque location dans un batch —
+            # envoyer 100 locations = 100 appels. On regroupe donc les checkpoints
+            # par heure API (ex: 14h, 15h, 16h...) et on fait UNE requête par heure
+            # avec tous les points de cette heure. Max ~10 requêtes pour 8h de sortie.
+            from collections import defaultdict
+            par_heure = defaultdict(list)
+            for cp in checkpoints:
+                par_heure[cp["Heure_API"]].append(cp)
+
+            rep_map = {}  # heure_api → liste de réponses API
+            for heure_api, cps_h in par_heure.items():
+                frozen_h = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in cps_h)
+                r = memoire_meteo(frozen_h, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
+                if r:
+                    rep_map[heure_api] = r
+
+            # Reconstruire rep_list dans l'ordre des checkpoints
+            rep_list = []
+            idx_par_heure = defaultdict(int)
+            for cp in checkpoints:
+                h = cp["Heure_API"]
+                if h in rep_map:
+                    i = idx_par_heure[h]
+                    rep_list.append(rep_map[h][i] if i < len(rep_map[h]) else {})
+                    idx_par_heure[h] += 1
+                else:
+                    rep_list.append({})
+
+            rep_list = rep_list if rep_list else None
 
     etapes.empty()
 
