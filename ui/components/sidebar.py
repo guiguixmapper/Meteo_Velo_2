@@ -139,7 +139,7 @@ def render_sidebar():
 def render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
-                  ref_val, mode, poids, date_dep):
+                  ref_val, mode, poids, date_dep, df_profil_carte=None):
     from ui.map_builder import creer_carte
     from ui.components.export import generer_html_resume
 
@@ -148,7 +148,7 @@ def render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
         st.sidebar.markdown('<div class="sb-section">📤 Export</div>', unsafe_allow_html=True)
         if st.sidebar.button("📄 Télécharger le Roadbook", width="stretch"):
             with st.spinner("Génération..."):
-                carte_export = creer_carte(points_gpx, resultats, ascensions, points_eau)
+                carte_export = creer_carte(points_gpx, resultats, ascensions, points_eau, df_profil=df_profil)
                 html_bytes   = generer_html_resume(
                     score, ascensions, resultats, dist_tot, d_plus, d_moins, temps_s,
                     date_depart, heure_arr, vitesse, vit_moy_reelle, calories,
