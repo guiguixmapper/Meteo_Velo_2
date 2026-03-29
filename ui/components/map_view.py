@@ -11,7 +11,7 @@ from config.settings import FONDS_CARTE
 
 
 def render_map_view(points_gpx, resultats, ascensions, points_eau, infos_soleil,
-                    date_depart, heure_arr):
+                    date_depart, heure_arr, df_profil=None):
     # Soleil
     if infos_soleil:
         ls = infos_soleil["lever"].strftime("%H:%M")
@@ -37,5 +37,5 @@ def render_map_view(points_gpx, resultats, ascensions, points_eau, infos_soleil,
 
     # Pas de cache — la carte doit toujours refléter les resultats météo à jour.
     # Folium est suffisamment rapide pour être regénéré à chaque affichage.
-    carte = creer_carte(points_gpx, resultats, ascensions, points_eau, tiles, attr)
+    carte = creer_carte(points_gpx, resultats, ascensions, points_eau, tiles, attr, df_profil=df_profil)
     st_folium(carte, width="100%", height=700, returned_objects=[])
