@@ -8,10 +8,6 @@ import folium
 from config.settings import COULEURS_CAT
 
 
-# ==============================================================================
-# HELPERS ICÔNES
-# ==============================================================================
-
 def _rond(emoji: str, bg: str, size: int = 30, font: int = 14) -> str:
     return (
         f'<div style="background:{bg};color:white;border-radius:50%;'
@@ -38,6 +34,15 @@ def _couleur_temp(t: float) -> str:
     return              "#FF3B30"
 
 
+def _couleur_pente(p: float) -> str:
+    if p < 3:   return "#22c55e"
+    if p < 6:   return "#84cc16"
+    if p < 8:   return "#eab308"
+    if p < 10:  return "#f97316"
+    if p < 12:  return "#ef4444"
+    return              "#7f1d1d"
+
+
 def _couleur_eau(type_eau: str) -> str:
     return {"fontaine": "#0ea5e9", "source": "#06b6d4", "borne": "#3b82f6"}.get(type_eau, "#32ADE6")
 
@@ -45,25 +50,17 @@ def _couleur_eau(type_eau: str) -> str:
 EMOJI_EAU = {"fontaine": "💧", "source": "💧", "borne": "💧", "eau": "💧"}
 
 
-# ==============================================================================
-# POPUPS
-# ==============================================================================
-
 def _popup_meteo(cp: dict, t: float) -> str:
     res = cp.get("ressenti")
     pp  = cp.get("pluie_pct")
     vv  = cp.get("vent_val", 0) or 0
-
     barre = ""
     if pp is not None:
         pc = "#1d4ed8" if pp >= 70 else "#2563eb" if pp >= 40 else "#60a5fa"
         barre = (f'<div style="margin:5px 0 2px;font-size:11px">🌧️ Pluie : <b>{pp}%</b></div>'
                  f'<div style="background:#e2e8f0;border-radius:4px;height:5px;width:100%">'
                  f'<div style="background:{pc};width:{pp}%;height:5px;border-radius:4px"></div></div>')
-
-    ressenti = (f'<span style="color:#6b7280;font-size:11px">&nbsp;(ressenti {res}°C)</span>'
-                if res else "")
-
+    ressenti = (f'<span style="color:#6b7280;font-size:11px">&nbsp;(ressenti {res}°C)</span>' if res else "")
     return (
         '<div style="font-family:-apple-system,sans-serif;font-size:12px;min-width:200px">'
         f'<div style="font-weight:700;font-size:13px;border-bottom:1px solid #e2e8f0;'
@@ -79,8 +76,7 @@ def _popup_meteo(cp: dict, t: float) -> str:
 def _popup_col(asc: dict) -> str:
     nom     = asc.get("Nom", "—")
     alt_osm = asc.get("Nom OSM alt")
-    alt_line = (f'<div>⛰️ {asc["Alt. sommet"]}'
-                + (f' · OSM : {alt_osm} m' if alt_osm else '') + '</div>')
+    alt_line = (f'<div>⛰️ {asc["Alt. sommet"]}' + (f' · OSM : {alt_osm} m' if alt_osm else '') + '</div>')
     temps_line = (
         f'<div style="margin-top:5px">⏱️ {asc.get("Temps col","—")} · arr. {asc.get("Arrivée sommet","—")}</div>'
         if asc.get("Temps col") else "")
@@ -95,27 +91,22 @@ def _popup_col(asc: dict) -> str:
 
 
 def _tooltip_meteo(cp: dict, t: float) -> str:
-    """Tooltip avec flèche SVG de direction du vent."""
     vv      = cp.get("vent_val", 0) or 0
     dir_deg = cp.get("dir_deg")
     effet   = cp.get("effet", "—")
-
     fc = ("#94a3b8" if vv == 0 else "#22c55e" if vv < 10
           else "#eab308" if vv < 25 else "#f97316" if vv < 40 else "#ef4444")
     rotation = (dir_deg + 180) % 360 if dir_deg is not None else 0
-
     effet_bg  = {"⬇️ Face": "#fee2e2", "⬆️ Dos": "#dcfce7",
                  "↙️ Côté (D)": "#fef9c3", "↘️ Côté (G)": "#fef9c3"}.get(effet, "#f1f5f9")
     effet_col = {"⬇️ Face": "#dc2626", "⬆️ Dos": "#16a34a",
                  "↙️ Côté (D)": "#ca8a04", "↘️ Côté (G)": "#ca8a04"}.get(effet, "#64748b")
-
     svg = (f'<svg width="32" height="32" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">'
            f'<circle cx="22" cy="22" r="20" fill="white" stroke="#e2e8f0" stroke-width="1.5"/>'
            f'<g transform="rotate({rotation},22,22)">'
            f'<polygon points="22,6 27,32 22,28 17,32" fill="{fc}"/>'
            f'<circle cx="22" cy="22" r="3" fill="{fc}"/>'
            f'</g></svg>')
-
     return (
         f'<div style="font-family:-apple-system,sans-serif;font-size:12px;'
         f'background:white;padding:8px 10px;border-radius:8px;'
@@ -134,9 +125,56 @@ def _tooltip_meteo(cp: dict, t: float) -> str:
     )
 
 
-# ==============================================================================
-# CSS LAYER CONTROL
-# ==============================================================================
+def _tracer_par_pente(points_gpx: list, df_profil, fg_trace: folium.FeatureGroup):
+    """Trace le parcours avec des segments colorés selon la pente."""
+    if df_profil is None or df_profil.empty or len(points_gpx) < 2:
+        folium.PolyLine(
+            [[p.latitude, p.longitude] for p in points_gpx],
+            color="#2563eb", weight=5, opacity=0.88
+        ).add_to(fg_trace)
+        return
+
+    dists = df_profil["Distance (km)"].tolist()
+    alts  = df_profil["Altitude (m)"].tolist()
+    n     = len(dists)
+
+    # Pente glissante sur ~300m
+    pentes = [0.0] * n
+    for i in range(1, n):
+        for j in range(i - 1, -1, -1):
+            d = (dists[i] - dists[j]) * 1000
+            if d >= 300:
+                pentes[i] = (alts[i] - alts[j]) / d * 100
+                break
+
+    # Associer chaque point GPX à l'index profil le plus proche
+    dist_cum = 0.0
+    coords_avec_pente = [(points_gpx[0].latitude, points_gpx[0].longitude, 0.0)]
+    j = 0
+    for i in range(1, len(points_gpx)):
+        p1, p2 = points_gpx[i - 1], points_gpx[i]
+        dist_cum += (p1.distance_2d(p2) or 0.0) / 1000
+        while j < n - 1 and abs(dists[j + 1] - dist_cum) < abs(dists[j] - dist_cum):
+            j += 1
+        coords_avec_pente.append((p2.latitude, p2.longitude, pentes[j]))
+
+    # Tracer par segments de même couleur
+    segment_coords = [coords_avec_pente[0][:2]]
+    couleur_courante = _couleur_pente(max(0, coords_avec_pente[0][2]))
+
+    for lat, lon, pente in coords_avec_pente[1:]:
+        c = _couleur_pente(max(0, pente))
+        if c == couleur_courante:
+            segment_coords.append((lat, lon))
+        else:
+            if len(segment_coords) >= 2:
+                folium.PolyLine(segment_coords, color=couleur_courante, weight=5, opacity=0.9).add_to(fg_trace)
+            segment_coords = [segment_coords[-1], (lat, lon)]
+            couleur_courante = c
+
+    if len(segment_coords) >= 2:
+        folium.PolyLine(segment_coords, color=couleur_courante, weight=5, opacity=0.9).add_to(fg_trace)
+
 
 CSS_LAYERS = """
 <style>
@@ -159,12 +197,9 @@ CSS_LAYERS = """
 """
 
 
-# ==============================================================================
-# FONCTION PRINCIPALE
-# ==============================================================================
-
 def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau: list,
-                tiles: str = "CartoDB positron", attr: str = None) -> folium.Map:
+                tiles: str = "CartoDB positron", attr: str = None,
+                df_profil=None) -> folium.Map:
     """Construit la carte Folium complète."""
     kwargs = dict(location=[points_gpx[0].latitude, points_gpx[0].longitude],
                   zoom_start=11, tiles=tiles, scrollWheelZoom=True)
@@ -177,9 +212,9 @@ def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau:
     fg_cols  = folium.FeatureGroup(name="🏔️ Ascensions",  show=True)
     fg_eau   = folium.FeatureGroup(name="💧 Points d'eau", show=True)
 
-    # Tracé
-    folium.PolyLine([[p.latitude, p.longitude] for p in points_gpx],
-                    color="#2563eb", weight=5, opacity=0.88).add_to(fg_trace)
+    # Tracé coloré par pente
+    _tracer_par_pente(points_gpx, df_profil, fg_trace)
+
     folium.Marker([points_gpx[0].latitude, points_gpx[0].longitude],
                   tooltip=folium.Tooltip("🚦 Départ", sticky=True),
                   icon=folium.DivIcon(html=_rond("▶", "#34C759", size=32, font=13),
@@ -189,7 +224,6 @@ def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau:
                   icon=folium.DivIcon(html=_rond("🏁", "#FF3B30", size=32, font=14),
                                       icon_size=(32,32), icon_anchor=(16,16))).add_to(fg_trace)
 
-    # Météo
     for cp in resultats:
         t = cp.get("temp_val")
         if t is None:
@@ -203,7 +237,6 @@ def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau:
                                 icon_size=(50,24), icon_anchor=(25,12)),
         ).add_to(fg_meteo)
 
-    # Ascensions
     for asc in ascensions:
         lat_s = asc.get("_lat_sommet")
         lon_s = asc.get("_lon_sommet")
@@ -221,7 +254,6 @@ def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau:
                                 icon_size=(28,28), icon_anchor=(14,14)),
         ).add_to(fg_cols)
 
-    # Points d'eau
     for pt in points_eau:
         type_eau = pt.get("type", "eau")
         coul     = _couleur_eau(type_eau)
