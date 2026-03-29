@@ -66,25 +66,27 @@ def recuperer_meteo_batch(checkpoints_frozen: tuple,
     lats = ",".join(str(c[0]) for c in checkpoints_frozen)
     lons = ",".join(str(c[1]) for c in checkpoints_frozen)
 
+    # POST avec params dans le body — évite la limite de longueur d'URL (414)
+    # qui tronquait silencieusement les réponses avec 50+ checkpoints.
     if is_past and date_str:
-        url = (
-            "https://archive-api.open-meteo.com/v1/archive"
-            f"?latitude={lats}&longitude={lons}"
-            f"&start_date={date_str}&end_date={date_str}"
-            "&hourly=temperature_2m,precipitation,weathercode,"
-            "wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto"
+        base_url = "https://archive-api.open-meteo.com/v1/archive"
+        params = dict(
+            latitude=lats, longitude=lons,
+            start_date=date_str, end_date=date_str,
+            hourly="temperature_2m,precipitation,weathercode,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+            timezone="auto"
         )
     else:
-        url = (
-            "https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lats}&longitude={lons}"
-            "&hourly=temperature_2m,precipitation_probability,weathercode,"
-            "wind_speed_10m,wind_direction_10m,wind_gusts_10m&timezone=auto"
+        base_url = "https://api.open-meteo.com/v1/forecast"
+        params = dict(
+            latitude=lats, longitude=lons,
+            hourly="temperature_2m,precipitation_probability,weathercode,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+            timezone="auto"
         )
 
     for attempt, delay in enumerate(RETRY_METEO_DELAYS + [None]):
         try:
-            r = requests.get(url, timeout=15)
+            r = requests.get(base_url, params=params, timeout=15)
             if r.status_code == 429:
                 if delay is not None:
                     logger.warning(f"Météo 429 — tentative {attempt+1}, attente {delay}s")
