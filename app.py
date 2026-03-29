@@ -197,8 +197,15 @@ def main():
     # ── Météo ─────────────────────────────────────────────────────────────────
     with etapes.container():
         with st.spinner("📡 Récupération météo…"):
-            cps_meteo = checkpoints[::max(1, len(checkpoints)//MAX_CHECKPOINTS_METEO)] \
-                        if len(checkpoints) > MAX_CHECKPOINTS_METEO else checkpoints
+            if len(checkpoints) > MAX_CHECKPOINTS_METEO:
+                pas = max(1, len(checkpoints) // MAX_CHECKPOINTS_METEO)
+                cps_meteo = checkpoints[::pas]
+                # S'assurer que le dernier checkpoint est toujours inclus
+                # pour éviter les marqueurs manquants en fin de parcours.
+                if cps_meteo[-1] is not checkpoints[-1]:
+                    cps_meteo = cps_meteo + [checkpoints[-1]]
+            else:
+                cps_meteo = checkpoints
             frozen    = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in cps_meteo)
 
             # CORRECTIF #3 : utiliser date_cls.today() — datetime est déjà importé,
