@@ -9,7 +9,8 @@ Toute la logique est dans core/, infrastructure/ et ui/.
 import streamlit as st
 import pandas as pd
 import logging
-from datetime import datetime, timedelta, date as date_cls
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor  # <-- AJOUT POUR L'OPTIMISATION
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,8 +42,7 @@ from config.settings import MAX_CHECKPOINTS_METEO
 
 # ── Cache météo avec retry ─────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def memoire_meteo(frozen, is_past=False, date_str=None, _v=2):
-    # _v=2 : invalide le cache de l'ancienne version (sans ce paramètre)
+def memoire_meteo(frozen, is_past=False, date_str=None):
     return recuperer_meteo_batch(frozen, is_past=is_past, date_str=date_str)
 
 
@@ -84,59 +84,51 @@ def main():
     st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
 
     # ── Chargement GPX ─────────────────────────────────────────────────────────
-    # CORRECTIF #1 : lire le fichier une seule fois et le stocker en session_state.
-    # fichier.read() consomme le stream — les re-runs suivants retourneraient b"".
-    _gpx_key = f"gpx_raw_{fichier.file_id}"
-    if _gpx_key not in st.session_state:
-        st.session_state[_gpx_key] = fichier.read()
-
     etapes = st.empty()
     with etapes.container():
         with st.spinner("📍 Lecture du fichier GPX…"):
-            points_gpx = parser_gpx(st.session_state[_gpx_key])
-
+            points_gpx = parser_gpx(fichier.read())
     if not points_gpx:
         st.error("❌ Fichier GPX vide ou corrompu.")
         return
 
-    # ── Fuseau horaire ─────────────────────────────────────────────────────────
+    # ── Récupération des données externes (PARALLÈLE) ─────────────────────────
+    lat, lon = points_gpx[0].latitude, points_gpx[0].longitude
+    date_str = date_dep.strftime("%Y-%m-%d")
+    
+    # On prépare les coordonnées des points d'eau avant de lancer les threads
+    coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
+
     with etapes.container():
-        with st.spinner("🌍 Fuseau horaire…"):
-            fuseau = recuperer_fuseau(points_gpx[0].latitude, points_gpx[0].longitude)
+        # Un seul spinner global pour toutes les requêtes externes
+        with st.spinner("🌐 Recherche en parallèle : Météo, Soleil, UV, Points d'eau…"):
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # On lance TOUTES les requêtes d'un coup
+                future_fuseau = executor.submit(recuperer_fuseau, lat, lon)
+                future_soleil = executor.submit(recuperer_soleil, lat, lon, date_str)
+                future_uv     = executor.submit(recuperer_uv_pollen, lat, lon, date_str)
+                future_eau    = executor.submit(recuperer_points_eau, coords_tuple)
+
+                # On récupère les résultats (Python attend que tout soit fini ici)
+                fuseau      = future_fuseau.result()
+                infos_soleil = future_soleil.result()
+                uv_pollen   = future_uv.result()
+                points_eau  = future_eau.result()
+
     ph_fuseau.success(f"🌍 **{fuseau}**")
     date_depart = datetime.combine(date_dep, heure_dep)
 
-    # ── Soleil ─────────────────────────────────────────────────────────────────
-    with etapes.container():
-        with st.spinner("🌅 Lever/coucher du soleil…"):
-            infos_soleil = recuperer_soleil(
-                points_gpx[0].latitude, points_gpx[0].longitude,
-                date_dep.strftime("%Y-%m-%d"))
-
-    # ── UV & Pollen ────────────────────────────────────────────────────────────
-    with etapes.container():
-        with st.spinner("🌞 UV & Pollen…"):
-            uv_pollen = recuperer_uv_pollen(
-                points_gpx[0].latitude, points_gpx[0].longitude,
-                date_dep.strftime("%Y-%m-%d"))
-
     # ── Calcul parcours (mis en cache) ─────────────────────────────────────────
-    _key = f"parcours_v2_{fichier.file_id}_{vitesse}_{intervalle}_{date_depart}"
-    # "v2" dans la clé invalide tout cache de l'ancienne version (sans "cap").
-    # Si le cache existe mais est incomplet (migration), on le supprime.
-    if _key in st.session_state and "cap" not in st.session_state[_key]:
-        del st.session_state[_key]
-
+    _key = f"parcours_{id(points_gpx)}_{vitesse}_{intervalle}_{date_depart}"
     if _key not in st.session_state:
         with etapes.container():
             with st.spinner("📐 Calcul du parcours…"):
                 res = calculer_parcours(points_gpx, vitesse, date_depart, intervalle_sec)
         st.session_state[_key] = res
+    else:
+        res = st.session_state[_key]
 
-    res         = st.session_state[_key]
-    # CORRECTIF #2 : on travaille sur une COPIE de la liste pour ne jamais muter
-    # le session_state — sinon le checkpoint d'arrivée se duplique à chaque re-run.
-    checkpoints = list(res["checkpoints"])
+    checkpoints = res["checkpoints"]
     profil_data = res["profil_data"]
     dist_tot    = res["dist_tot"]
     d_plus      = res["d_plus"]
@@ -147,7 +139,7 @@ def main():
     vit_moy_reelle = round((dist_tot / 1000) / (temps_s / 3600), 1) if temps_s > 0 else vitesse
     heure_arr      = date_depart + timedelta(seconds=temps_s)
 
-    # Checkpoint d'arrivée — ajouté sur la copie locale, pas sur le session_state
+    # Checkpoint d'arrivée
     pf = points_gpx[-1]
     checkpoints.append({
         "lat": pf.latitude, "lon": pf.longitude, "Cap": cap,
@@ -189,25 +181,24 @@ def main():
         asc.setdefault("Nom", "—")
         asc.setdefault("Nom OSM alt", None)
 
-    # ── Points d'eau ──────────────────────────────────────────────────────────
-    with etapes.container():
-        with st.spinner("💧 Recherche des points d'eau…"):
-            coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
-            points_eau   = recuperer_points_eau(coords_tuple)
-
     # ── Météo ─────────────────────────────────────────────────────────────────
     with etapes.container():
         with st.spinner("📡 Récupération météo…"):
-            is_past  = date_dep < date_cls.today()
-            frozen   = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in checkpoints)
-            rep_list = memoire_meteo(frozen, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
-            # Garantir que rep_list a exactement autant d'entrées que checkpoints.
-            # Si l'API retourne moins de résultats, on complète avec des dicts vides
-            # pour éviter que enrichir_checkpoints_meteo reçoive {} pour les derniers
-            # checkpoints → temp_val=None → marqueurs manquants sur la carte.
-            if rep_list is not None:
-                while len(rep_list) < len(checkpoints):
-                    rep_list.append(rep_list[-1] if rep_list else {})
+            cps_meteo = checkpoints[::max(1, len(checkpoints)//MAX_CHECKPOINTS_METEO)] \
+                        if len(checkpoints) > MAX_CHECKPOINTS_METEO else checkpoints
+            frozen    = tuple((cp["lat"], cp["lon"], cp["Heure_API"]) for cp in cps_meteo)
+            is_past   = date_dep < __import__('datetime').date.today()
+            rep_list  = memoire_meteo(frozen, is_past=is_past, date_str=date_dep.strftime("%Y-%m-%d"))
+
+            # Interpolation si sous-échantillonnage
+            if rep_list and len(cps_meteo) < len(checkpoints):
+                idx_map  = {id(cps_meteo[i]): i for i in range(len(cps_meteo))}
+                rep_full = []
+                j = 0
+                for cp in checkpoints:
+                    if id(cp) in idx_map: j = idx_map[id(cp)]
+                    rep_full.append(rep_list[j] if j < len(rep_list) else {})
+                rep_list = rep_full
 
     etapes.empty()
 
@@ -221,9 +212,7 @@ def main():
         resultats = enrichir_checkpoints_meteo(checkpoints, rep_list)
 
     # ── Score + métriques ─────────────────────────────────────────────────────
-    # Note : poids-10 modélise le poids cycliste sans le vélo (~10 kg).
-    # La valeur 10 est une approximation raisonnable mais non paramétrable.
-    calories      = calculer_calories(max(1, poids - 10), temps_s, dist_tot, d_plus, vitesse)
+    calories      = calculer_calories(max(1, poids-10), temps_s, dist_tot, d_plus, vitesse)
     score         = calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids)
     analyse_meteo = analyser_meteo_detaillee(resultats, dist_tot)
 
@@ -243,7 +232,7 @@ def main():
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
-                  ref_val, mode, poids, date_dep, df_profil_carte=df_profil)
+                  ref_val, mode, poids, date_dep)
 
     # ── Onglets ───────────────────────────────────────────────────────────────
     tab_carte, tab_profil, tab_meteo, tab_cols, tab_detail, tab_analyse = st.tabs([
@@ -252,7 +241,7 @@ def main():
 
     with tab_carte:
         render_map_view(points_gpx, resultats, ascensions, points_eau,
-                        infos_soleil, date_depart, heure_arr, df_profil=df_profil)
+                        infos_soleil, date_depart, heure_arr)
 
     with tab_profil:
         render_profile_view(df_profil, ascensions, vitesse, ref_val, mode, poids)
@@ -261,8 +250,7 @@ def main():
         render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo)
 
     with tab_cols:
-        render_climbs_view(ascensions, df_profil, vitesse, ref_val, ftp_fc, mode, poids,
-                           ftp_w=ref_val if mode == "⚡ Puissance" else ftp_fc)
+        render_climbs_view(ascensions, df_profil, vitesse, ref_val, ftp_fc, mode, poids, ftp_w=ref_val if mode == "⚡ Puissance" else ftp_fc)
 
     with tab_detail:
         render_detail_view(resultats, intervalle)
