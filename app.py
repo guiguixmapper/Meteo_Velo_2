@@ -213,7 +213,7 @@ def main():
 
     # ── Score + métriques ─────────────────────────────────────────────────────
     calories      = calculer_calories(max(1, poids-10), temps_s, dist_tot, d_plus, vitesse)
-    score         = calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids)
+    score         = calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids, dist_tot)
     analyse_meteo = analyser_meteo_detaillee(resultats, dist_tot)
 
     for asc in ascensions:
