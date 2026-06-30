@@ -54,7 +54,7 @@ def main():
     st.set_page_config(page_title="Vélo & Météo", page_icon="🚴‍♂️", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
 
-    # ── Sidebar ────────────────────────────────────────────────────────────────
+    # ── Sidebar ──────────────────────────────────────────────────────────
     params = render_sidebar()
     fichier        = params["fichier"]
     date_dep       = params["date_dep"]
@@ -71,7 +71,7 @@ def main():
     ph_fuseau      = params["ph_fuseau"]
     ph_export      = params["ph_export"]
 
-    # ── Page d'accueil ─────────────────────────────────────────────────────────
+    # ── Page d'accueil ────────────────────────────────────────────────────────
     if fichier is None:
         st.markdown("""
         <div style="text-align:center;padding:60px 20px;color:#9ca3af">
@@ -83,7 +83,7 @@ def main():
 
     st.markdown('<div style="height: 1.5rem;"></div>', unsafe_allow_html=True)
 
-    # ── Chargement GPX ─────────────────────────────────────────────────────────
+    # ── Chargement GPX ────────────────────────────────────────────────────────
     etapes = st.empty()
     with etapes.container():
         with st.spinner("📍 Lecture du fichier GPX…"):
@@ -172,7 +172,7 @@ def main():
             asc["_lat_sommet"], asc["_lon_sommet"] = coords_au_km(asc["_sommet_km"])
             asc["_lat_debut"],  asc["_lon_debut"]  = coords_au_km(asc["_debut_km"])
 
-    # ── Noms OSM ──────────────────────────────────────────────────────────────
+    # ── Noms OSM ───────────────────────────────────────────────────────────
     if noms_osm and ascensions:
         with etapes.container():
             with st.spinner("🗺️ Noms des cols (OpenStreetMap)…"):
@@ -181,7 +181,7 @@ def main():
         asc.setdefault("Nom", "—")
         asc.setdefault("Nom OSM alt", None)
 
-    # ── Météo ─────────────────────────────────────────────────────────────────
+    # ── Météo ──────────────────────────────────────────────────────────
     with etapes.container():
         with st.spinner("📡 Récupération météo…"):
             cps_meteo = checkpoints[::max(1, len(checkpoints)//MAX_CHECKPOINTS_METEO)] \
@@ -228,20 +228,20 @@ def main():
     render_metrics_banner(score, dist_tot, d_plus, d_moins, temps_s,
                           vit_moy_reelle, heure_arr, calories)
 
-    # ── Export sidebar ────────────────────────────────────────────────────────
+    # ── Export sidebar ───────────────────────────────────────────────────────
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
                   ref_val, mode, poids, date_dep)
 
-    # ── Onglets ───────────────────────────────────────────────────────────────
+    # ── Onglets ──────────────────────────────────────────────────────────
     tab_carte, tab_profil, tab_meteo, tab_cols, tab_detail, tab_analyse = st.tabs([
         "🗺️ Carte", "⛰️ Profil & Cols", "🌤️ Météo", "🏔️ Ascensions", "📋 Détail", "🤖 Coach IA"
     ])
 
     with tab_carte:
         render_map_view(points_gpx, resultats, ascensions, points_eau,
-                        infos_soleil, date_depart, heure_arr)
+                        infos_soleil, date_depart, heure_arr, fuseau)
 
     with tab_profil:
         render_profile_view(df_profil, ascensions, vitesse, ref_val, mode, poids)
