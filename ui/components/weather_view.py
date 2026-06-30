@@ -1,7 +1,7 @@
 """
 ui/components/weather_view.py
 ==============================
-Onglet Météo — graphiques + UV/pollen + répartition vent.
+Onglet Météo — graphiques + UV/pollen + répartition vent (ÉPURÉ)
 """
 
 import streamlit as st
@@ -35,7 +35,7 @@ def creer_figure_meteo(resultats):
             hovertemplate="<b>Km %{x}</b><br>Temp : %{y}°C<extra></extra>",
             name="Température"), row=1, col=1)
         fig.add_hrect(y0=15, y1=22, row=1, col=1, fillcolor="rgba(34,197,94,0.10)", line_width=0,
-            annotation_text="Zone idéale (15–22°C)", annotation_font_size=9,
+            annotation_text="Idéal", annotation_font_size=8,
             annotation_font_color="#16a34a", annotation_position="top left")
         fig.add_trace(go.Bar(x=kms, y=vents, marker_color=cv, name="Vent moyen",
             hovertemplate="<b>Km %{x}</b><br>Vent : %{y} km/h<extra></extra>"), row=2, col=1)
@@ -46,15 +46,15 @@ def creer_figure_meteo(resultats):
         fig.add_trace(go.Bar(x=kms, y=pluies, marker_color=cp_, name="Pluie",
             hovertemplate="<b>Km %{x}</b><br>Pluie : %{y}%<extra></extra>"), row=3, col=1)
         fig.add_hline(y=50, row=3, col=1, line_dash="dot", line_color="#64748b", line_width=1.5,
-            annotation_text="Seuil 50%", annotation_font_size=9,
+            annotation_text="50%", annotation_font_size=8,
             annotation_font_color="#64748b", annotation_position="top right")
 
-    fig.update_layout(height=620, margin=dict(l=55, r=20, t=45, b=40),
+    fig.update_layout(height=550, margin=dict(l=55, r=20, t=45, b=40),
         hovermode="x unified", plot_bgcolor="white", paper_bgcolor="white",
         showlegend=False, dragmode=False, font=dict(color="#1e293b"),
         annotationdefaults=dict(font=dict(color="#1e293b")))
     for ann in fig.layout.annotations:
-        ann.font.color = "#1e293b"; ann.font.size = 13
+        ann.font.color = "#1e293b"; ann.font.size = 11
     fig.update_yaxes(showgrid=True, gridcolor="#f1f5f9", row=1, col=1, title_text="°C")
     fig.update_yaxes(showgrid=True, gridcolor="#f1f5f9", row=2, col=1, title_text="km/h", rangemode="tozero")
     fig.update_yaxes(showgrid=True, gridcolor="#f1f5f9", row=3, col=1, title_text="%", range=[0, 105])
@@ -79,12 +79,11 @@ def render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo):
         <div style="border:1px solid rgba(128,128,128,0.18);border-radius:12px;
                     padding:14px 18px;background:rgba(128,128,128,0.04)">
           <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;
-                      letter-spacing:0.5px;opacity:0.5;margin-bottom:6px">☀️ Indice UV max</div>
+                      letter-spacing:0.5px;opacity:0.5;margin-bottom:6px">☀️ UV</div>
           <div style="font-size:2rem;font-weight:900;color:{coul};line-height:1">
             {uv if uv is not None else "—"}</div>
           <div style="font-size:0.8rem;color:{coul};font-weight:600;margin-top:4px">
             {emoji} {lbl_court}</div>
-          {"<div style='font-size:0.75rem;opacity:0.55;margin-top:4px'>🧴 Crème solaire recommandée</div>" if uv and uv >= 3 else ""}
         </div>""", unsafe_allow_html=True)
 
     with poll_col:
@@ -93,27 +92,19 @@ def render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo):
         <div style="border:1px solid rgba(128,128,128,0.18);border-radius:12px;
                     padding:14px 18px;background:rgba(128,128,128,0.04);height:100%">
           <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;
-                      letter-spacing:0.5px;opacity:0.5;margin-bottom:8px">🌿 Alertes Pollen</div>
+                      letter-spacing:0.5px;opacity:0.5;margin-bottom:8px">🌿 Pollens</div>
           {"".join(f'<div style="font-size:0.83rem;font-weight:500;padding:3px 0">{p}</div>' for p in pollens)
             if pollens else
-            '<div style="font-size:0.83rem;opacity:0.55">✅ Aucune alerte pollen significative</div>'}
+            '<div style="font-size:0.83rem;opacity:0.55">✅ Aucune alerte</div>'}
         </div>""", unsafe_allow_html=True)
 
-    st.divider()
-    st.caption("Température · Vent & Rafales · Probabilité de pluie.")
-    st.plotly_chart(creer_figure_meteo(resultats), width='stretch', key="weather_chart")
+    st.plotly_chart(creer_figure_meteo(resultats), use_container_width=True, key="weather_chart")
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**Température** — 🟣 <5° · 🔵 5–15° · 🟢 15–22° (idéal) · 🟠 22–30° · 🔴 >30°C")
-    with c2:
-        st.markdown("**Vent** — 🟢 <10 · 🟡 10–25 · 🟠 25–40 · 🔴 >40 km/h | **Pluie** — clair→foncé")
-
+    # Analyse météo détaillée
     if analyse_meteo:
-        st.divider()
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown("**💨 Répartition du vent**")
+            st.markdown("**💨 Vent**")
             def barre(pct, couleur, label, emoji):
                 st.markdown(f"""
                 <div style="margin-bottom:8px">
@@ -127,30 +118,25 @@ def render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo):
             barre(analyse_meteo["pct_face"], "#ef4444", "Face",   "⬇️")
             barre(analyse_meteo["pct_cote"], "#eab308", "Côté",   "↔️")
             barre(analyse_meteo["pct_dos"],  "#22c55e", "Dos",    "⬆️")
-            if analyse_meteo.get("segments_face"):
-                st.caption("Segments avec vent de face :")
-                for s in analyse_meteo["segments_face"]:
-                    st.caption(f"· Km {s[0]} → {s[1]} ({round(s[1]-s[0],1)} km)")
 
         with c2:
-            st.markdown("**🌧️ Risque de pluie**")
+            st.markdown("**🌧️ Pluie**")
             pp = analyse_meteo["pct_pluie"]
             couleur_pp = "#ef4444" if pp > 60 else "#f97316" if pp > 30 else "#22c55e"
             st.markdown(f"""
             <div style="text-align:center;padding:16px;background:rgba(128,128,128,0.04);
-                        border-radius:10px;margin-bottom:12px">
+                        border-radius:10px">
                 <div style="font-size:2.5rem;font-weight:900;color:{couleur_pp}">{pp}%</div>
-                <div style="font-size:.85rem;opacity:0.6">du parcours avec risque > 50%</div>
+                <div style="font-size:.8rem;opacity:0.6">du parcours > 50%</div>
             </div>""", unsafe_allow_html=True)
             if analyse_meteo["premier_pluie"]:
                 cp_p = analyse_meteo["premier_pluie"]
-                st.markdown(f"""
-                <div style="background:rgba(251,191,36,0.1);border-radius:8px;padding:10px 14px;font-size:.85rem">
-                    🕐 Premier risque à <b>{cp_p['Heure']}</b> — Km {cp_p['Km']}<br>
-                    Probabilité : <b>{cp_p.get('pluie_pct','?')}%</b>
-                </div>""", unsafe_allow_html=True)
+                st.info(f"🕐 Km {cp_p['Km']} à {cp_p['Heure']} — {cp_p.get('pluie_pct','?')}%")
             else:
-                st.markdown("""
-                <div style="background:rgba(34,197,94,0.1);border-radius:8px;padding:10px 14px;font-size:.85rem">
-                    ✅ Aucun risque de pluie significatif sur le parcours
-                </div>""", unsafe_allow_html=True)
+                st.success("✅ Aucun risque significatif")
+
+        # Segments avec vent de face (compact)
+        if analyse_meteo.get("segments_face"):
+            st.markdown("**Segments avec vent de face :**")
+            segments_text = " · ".join(f"Km {round(s[0],1)}→{round(s[1],1)}" for s in analyse_meteo["segments_face"])
+            st.caption(segments_text)
