@@ -116,13 +116,13 @@ def analyser_meteo_detaillee(resultats: list, dist_tot: float) -> dict | None:
 def calculer_score(resultats, ascensions, d_plus, vitesse, ref_val, mode, poids, dist_tot):
     """
     Indice de Roulabilité sur 10.
-    Départ à 10. La route enlève un tout petit peu de points, la météo peut en enlever beaucoup.
+    Départ à 10. La route enlève très peu de points, la météo peut en enlever beaucoup.
     """
     dist_km = dist_tot / 1000.0
     
-    # 1. Pénalité de la route (NÉGLIGEABLE)
-    # 200km = -1 point / 2000m D+ = -1 point.
-    cout_route = (dist_km / 200.0) + (d_plus / 2000.0)
+    # 1. Pénalité de la route (TRÈS NÉGLIGEABLE)
+    # 500km = -1 point / 5000m D+ = -1 point.
+    cout_route = (dist_km / 500.0) + (d_plus / 5000.0)
     
     # 2. Pénalité Météo
     total_aero = 0.0
