@@ -2,15 +2,14 @@
 app.py — Point d'entrée unique
 ================================
 Vélo & Météo — Analyse de tracé GPX.
-Ce fichier ne contient QUE le bootstrap et l'orchestration.
-Toute la logique est dans core/, infrastructure/ et ui/.
+Structure : 4 onglets optimisés (Vue Globale, Météo, Profil & Ascensions, Coach IA)
 """
 
 import streamlit as st
 import pandas as pd
 import logging
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor  # <-- AJOUT POUR L'OPTIMISATION
+from concurrent.futures import ThreadPoolExecutor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,11 +18,9 @@ logger = logging.getLogger(__name__)
 from ui.styles.theme import CSS
 from ui.components.sidebar import render_sidebar, render_export
 from ui.components.metrics_banner import render_metrics_banner
-from ui.components.map_view import render_map_view
-from ui.components.profile_view import render_profile_view
+from ui.components.overview_view import render_overview_view
 from ui.components.weather_view import render_weather_view
-from ui.components.climbs_view import render_climbs_view
-from ui.components.detail_view import render_detail_view
+from ui.components.profile_climbs_view import render_profile_climbs_view
 from ui.components.coach_view import render_coach_view
 
 from core.services.route_service import (
@@ -54,7 +51,7 @@ def main():
     st.set_page_config(page_title="Vélo & Météo", page_icon="🚴‍♂️", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
 
-    # ── Sidebar ──────────────────────────────────────────────────────────
+    # ── Sidebar ────────────────────────────────────────────────────────────────
     params = render_sidebar()
     fichier        = params["fichier"]
     date_dep       = params["date_dep"]
@@ -95,21 +92,16 @@ def main():
     # ── Récupération des données externes (PARALLÈLE) ─────────────────────────
     lat, lon = points_gpx[0].latitude, points_gpx[0].longitude
     date_str = date_dep.strftime("%Y-%m-%d")
-    
-    # On prépare les coordonnées des points d'eau avant de lancer les threads
     coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
 
     with etapes.container():
-        # Un seul spinner global pour toutes les requêtes externes
         with st.spinner("🌐 Recherche en parallèle : Météo, Soleil, UV, Points d'eau…"):
             with ThreadPoolExecutor(max_workers=4) as executor:
-                # On lance TOUTES les requêtes d'un coup
                 future_fuseau = executor.submit(recuperer_fuseau, lat, lon)
                 future_soleil = executor.submit(recuperer_soleil, lat, lon, date_str)
                 future_uv     = executor.submit(recuperer_uv_pollen, lat, lon, date_str)
                 future_eau    = executor.submit(recuperer_points_eau, coords_tuple)
 
-                # On récupère les résultats (Python attend que tout soit fini ici)
                 fuseau      = future_fuseau.result()
                 infos_soleil = future_soleil.result()
                 uv_pollen   = future_uv.result()
@@ -172,7 +164,7 @@ def main():
             asc["_lat_sommet"], asc["_lon_sommet"] = coords_au_km(asc["_sommet_km"])
             asc["_lat_debut"],  asc["_lon_debut"]  = coords_au_km(asc["_debut_km"])
 
-    # ── Noms OSM ───────────────────────────────────────────────────────────
+    # ── Noms OSM ──────────────────────────────────────────────────────────────
     if noms_osm and ascensions:
         with etapes.container():
             with st.spinner("🗺️ Noms des cols (OpenStreetMap)…"):
@@ -181,7 +173,7 @@ def main():
         asc.setdefault("Nom", "—")
         asc.setdefault("Nom OSM alt", None)
 
-    # ── Météo ──────────────────────────────────────────────────────────
+    # ── Météo ────────────────────────────────────────────────────────────────
     with etapes.container():
         with st.spinner("📡 Récupération météo…"):
             cps_meteo = checkpoints[::max(1, len(checkpoints)//MAX_CHECKPOINTS_METEO)] \
@@ -228,34 +220,30 @@ def main():
     render_metrics_banner(score, dist_tot, d_plus, d_moins, temps_s,
                           vit_moy_reelle, heure_arr, calories)
 
-    # ── Export sidebar ───────────────────────────────────────────────────────
+    # ── Export sidebar ────────────────────────────────────────────────────────
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
                   score, dist_tot, d_plus, d_moins, temps_s, date_depart,
                   heure_arr, vitesse, vit_moy_reelle, calories, df_profil,
                   ref_val, mode, poids, date_dep)
 
-    # ── Onglets ──────────────────────────────────────────────────────────
-    tab_carte, tab_profil, tab_meteo, tab_cols, tab_detail, tab_analyse = st.tabs([
-        "🗺️ Carte", "⛰️ Profil & Cols", "🌤️ Météo", "🏔️ Ascensions", "📋 Détail", "🤖 Coach IA"
+    # ── ONGLETS OPTIMISÉS (4 onglets) ─────────────────────────────────────────
+    tab_overview, tab_meteo, tab_profil, tab_coach = st.tabs([
+        "🗺️ Aperçu Global", "🌤️ Météo", "📊 Profil & Ascensions", "🤖 Coach IA"
     ])
 
-    with tab_carte:
-        render_map_view(points_gpx, resultats, ascensions, points_eau,
-                        infos_soleil, date_depart, heure_arr, fuseau)
-
-    with tab_profil:
-        render_profile_view(df_profil, ascensions, vitesse, ref_val, mode, poids)
+    with tab_overview:
+        render_overview_view(points_gpx, resultats, ascensions, points_eau,
+                            infos_soleil, score, dist_tot, d_plus, d_moins, temps_s,
+                            heure_arr, vit_moy_reelle, fuseau)
 
     with tab_meteo:
         render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo)
 
-    with tab_cols:
-        render_climbs_view(ascensions, df_profil, vitesse, ref_val, ftp_fc, mode, poids, ftp_w=ref_val if mode == "⚡ Puissance" else ftp_fc)
+    with tab_profil:
+        render_profile_climbs_view(df_profil, ascensions, vitesse, ref_val, ftp_fc, 
+                                  mode, poids, ftp_w=ref_val if mode == "⚡ Puissance" else ftp_fc)
 
-    with tab_detail:
-        render_detail_view(resultats, intervalle)
-
-    with tab_analyse:
+    with tab_coach:
         render_coach_view(gemini_key, dist_tot, d_plus, temps_s, calories, score,
                           ascensions, analyse_meteo, resultats, heure_dep, heure_arr,
                           vit_moy_reelle, infos_soleil, date_dep, points_eau, uv_pollen)
