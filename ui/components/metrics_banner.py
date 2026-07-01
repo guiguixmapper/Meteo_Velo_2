@@ -17,7 +17,7 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
     # ══════════════════════════════════════════════════════════════════════════
     # LIGNE 1 : Score (carré orange) + Soleil à droite
     # ══════════════════════════════════════════════════════════════════════════
-    top_cols = st.columns([1.6, 1, 5.4])
+    top_cols = st.columns([1.6, 2.2, 4.2])
 
     # ── Bloc score orange ─────────────────────────────────────────────────────
     with top_cols[0]:
@@ -64,9 +64,13 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
                     <div style="display:flex;align-items:center;gap:4px">
                         <span>☀️</span> <span>SOLEIL</span>
                     </div>
-                    <div style="color:#1f2937">🌅 {ls}</div>
-                    <div style="color:#1f2937">🌇 {cs}</div>
-                    <div style="opacity:0.6">{hj}h{mj:02d}m</div>
+                    <div style="display:flex;align-items:center;gap:8px;color:#1f2937">
+                        <span>🌅 {ls}</span>
+                        <span style="opacity:0.3">|</span>
+                        <span>🌇 {cs}</span>
+                        <span style="opacity:0.3">|</span>
+                        <span style="opacity:0.6">{hj}h{mj:02d}m</span>
+                    </div>
                 </div>""", unsafe_allow_html=True)
             except Exception:
                 pass  # Silencieusement ignorer les erreurs de fuseau
