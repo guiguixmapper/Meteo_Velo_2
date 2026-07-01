@@ -216,9 +216,9 @@ def main():
         asc["Temps col"]      = f"{mins_col} min ({vit_col} km/h)"
         asc["Arrivée sommet"] = heure_sommet.strftime("%H:%M")
 
-    # ── Bandeau métriques ─────────────────────────────────────────────────────
+    # ── Bandeau métriques + Soleil ─────────────────────────────────────────────
     render_metrics_banner(score, dist_tot, d_plus, d_moins, temps_s,
-                          vit_moy_reelle, heure_arr, calories)
+                          vit_moy_reelle, heure_arr, calories, infos_soleil, fuseau)
 
     # ── Export sidebar ────────────────────────────────────────────────────────
     render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
