@@ -132,6 +132,18 @@ COULEUR_TEAL      = "#0d9488"
 COULEUR_TEAL_DARK = "#0f766e"
 
 FONDS_CARTE = {
+    "🗺️ Plan IGN (Standard)": (
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
+    ),
+    "📸 Photos Aériennes (IGN)": (
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
+    ),
+    "🧱 Cadastre Officiel (IGN)": (
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "© <a href='https://www.impots.gouv.fr/' target='_blank'>DGFIP</a> / <a href='https://www.ign.fr/' target='_blank'>IGN</a>"
+    ),
     "🗺️ CartoDB Positron (épuré)": ("CartoDB positron", None),
     "🌍 OpenStreetMap (classique)": ("OpenStreetMap", None),
     "🏔️ OpenTopoMap (relief)": (
