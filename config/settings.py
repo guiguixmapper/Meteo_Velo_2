@@ -141,15 +141,7 @@ FONDS_CARTE = {
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
     "🏔️ IGN Topo (Précis)": (
-    "https://data.geopf.fr/wmts?"
-    "SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
-    "&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS"
-    "&STYLE=normal"
-    "&TILEMATRIXSET=PM"
-    "&FORMAT=image/png"
-    "&TILEMATRIX={z}"
-    "&TILEROW={y}"
-    "&TILECOL={x}",
+    "https://data.geopf.fr/private/wmts?apikey=ign_scan_ws&layer=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR&style=normal&tilematrixset=PM&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fjpeg&TileMatrix={0}&TileCol={1}&TileRow={2}",
     "© IGN / Géoplateforme",
 ),
     "🗺️ CartoDB Positron (épuré)": ("CartoDB positron", None),
