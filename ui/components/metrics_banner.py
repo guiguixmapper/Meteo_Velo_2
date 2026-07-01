@@ -1,15 +1,16 @@
 """
 ui/components/metrics_banner.py
 ================================
-Bannière score + métriques — colonnes Streamlit natives.
+Bannière score + métriques + ligne soleil
 """
 
 import streamlit as st
+from pytz import timezone
 
 
 def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: float,
                            temps_s: float, vit_moy_reelle: float,
-                           heure_arr, calories: int):
+                           heure_arr, calories: int, infos_soleil=None, fuseau="UTC"):
     dh = int(temps_s // 3600)
     dm = int((temps_s % 3600) // 60)
 
@@ -62,3 +63,31 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
                 f'letter-spacing:0.3px;opacity:0.45;margin-top:2px">{unit}</div>'
                 f'</div>',
                 unsafe_allow_html=True)
+
+    # ── LIGNE SOLEIL ──────────────────────────────────────────────────────────
+    if infos_soleil:
+        tz = timezone(fuseau)
+        lever_local = infos_soleil["lever"].astimezone(tz)
+        coucher_local = infos_soleil["coucher"].astimezone(tz)
+        
+        ls = lever_local.strftime("%H:%M")
+        cs = coucher_local.strftime("%H:%M")
+        ds = infos_soleil["coucher"] - infos_soleil["lever"]
+        hj = int(ds.seconds // 3600)
+        mj = int((ds.seconds % 3600) // 60)
+        
+        st.markdown(f"""
+        <div style="display:flex;gap:16px;padding:8px 0;margin-top:8px;
+                    border-top:1px solid #f1f5f9;padding-top:10px;font-size:0.85rem;
+                    font-weight:600;align-items:center">
+            <div style="display:flex;align-items:center;gap:4px;color:#64748b">
+                <span>☀️</span> <span>SOLEIL</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+                <div>🌅 {ls}</div>
+                <div style="opacity:0.3">|</div>
+                <div>🌇 {cs}</div>
+                <div style="opacity:0.3">|</div>
+                <div style="opacity:0.6">{hj}h{mj:02d}m</div>
+            </div>
+        </div>""", unsafe_allow_html=True)
