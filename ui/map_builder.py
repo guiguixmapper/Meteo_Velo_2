@@ -166,11 +166,22 @@ CSS_LAYERS = """
 def creer_carte(points_gpx: list, resultats: list, ascensions: list, points_eau: list,
                 tiles: str = "CartoDB positron", attr: str = None) -> folium.Map:
     """Construit la carte Folium complète."""
-    kwargs = dict(location=[points_gpx[0].latitude, points_gpx[0].longitude],
-                  zoom_start=11, tiles=tiles, scrollWheelZoom=True)
-    if attr:
-        kwargs["attr"] = attr
-    carte = folium.Map(**kwargs)
+    
+    # 1. On initialise la carte vide sans fond par défaut
+    carte = folium.Map(
+        location=[points_gpx[0].latitude, points_gpx[0].longitude],
+        zoom_start=11,
+        tiles=None,
+        scrollWheelZoom=True
+    )
+
+    # 2. On ajoute le fond de carte choisi avec control=False
+    # Cela permet de l'afficher sur la carte sans polluer le menu des calques avec l'URL brute
+    folium.TileLayer(
+        tiles=tiles,
+        attr=attr,
+        control=False
+    ).add_to(carte)
 
     # ── Deux calques séparés pour le tracé ──
     fg_trace_pente     = folium.FeatureGroup(name="📍 Parcours (Pente)", show=True)
