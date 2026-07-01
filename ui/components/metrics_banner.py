@@ -1,6 +1,4 @@
 """
-ui/components/metrics_banner.py
-================================
 Bannière score + soleil (ligne du haut) + métriques (ligne du bas)
 """
 
@@ -59,18 +57,14 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
                 mj = int((ds.seconds % 3600) // 60)
 
                 st.markdown(f"""
-                <div style="display:flex;flex-direction:column;gap:4px;padding:6px 0 0 4px;
+                <div style="display:flex;align-items:center;gap:8px;padding:16px 0 0 4px;
                             font-size:0.75rem;font-weight:600;color:#64748b">
-                    <div style="display:flex;align-items:center;gap:4px">
-                        <span>☀️</span> <span>SOLEIL</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;color:#1f2937">
-                        <span>🌅 {ls}</span>
-                        <span style="opacity:0.3">|</span>
-                        <span>🌇 {cs}</span>
-                        <span style="opacity:0.3">|</span>
-                        <span style="opacity:0.6">{hj}h{mj:02d}m</span>
-                    </div>
+                    <span style="font-weight:800;letter-spacing:0.5px">SOLEIL :</span>
+                    <span style="color:#1f2937">Lever {ls}</span>
+                    <span style="opacity:0.3">|</span>
+                    <span style="color:#1f2937">Coucher {cs}</span>
+                    <span style="opacity:0.3">|</span>
+                    <span style="opacity:0.6;color:#1f2937">{hj}h{mj:02d}m</span>
                 </div>""", unsafe_allow_html=True)
             except Exception:
                 pass  # Silencieusement ignorer les erreurs de fuseau
