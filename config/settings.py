@@ -140,7 +140,7 @@ FONDS_CARTE = {
         "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
-    "🏔️ IGN Topo (Classique)": (
+    "🏔️ IGN Topo (Précis)": (
         "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
