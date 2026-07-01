@@ -1,7 +1,7 @@
 """
 ui/components/metrics_banner.py
 ================================
-Bannière score + métriques + ligne soleil
+Bannière score + soleil (ligne du haut) + métriques (ligne du bas)
 """
 
 import streamlit as st
@@ -14,14 +14,17 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
     dh = int(temps_s // 3600)
     dm = int((temps_s % 3600) // 60)
 
-    cols = st.columns([1.6, 1, 1, 1, 1, 1, 1, 1])
+    # ══════════════════════════════════════════════════════════════════════════
+    # LIGNE 1 : Score (carré orange) + Soleil à droite
+    # ══════════════════════════════════════════════════════════════════════════
+    top_cols = st.columns([1.6, 1, 5.4])
 
     # ── Bloc score orange ─────────────────────────────────────────────────────
-    with cols[0]:
+    with top_cols[0]:
         c_meteo = "#FF3B30" if score["cout_meteo"] > 3.0 else "#34C759" if score["cout_meteo"] < 0 else "white"
         signe_m = "-" if score["cout_meteo"] > 0 else "+"
         val_m = abs(score["cout_meteo"])
-        
+
         st.markdown(
             f'<div style="background:#FC4C02;border-radius:10px;padding:6px 10px;'
             f'text-align:center;margin-top:2px">'
@@ -41,7 +44,8 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
             f'</div></div>',
             unsafe_allow_html=True)
 
-        # ── LIGNE SOLEIL (compacte, sous le score, dans la même colonne) ──────
+    # ── Bloc Soleil (à droite du score) ─────────────────────────────────────────
+    with top_cols[1]:
         if infos_soleil:
             try:
                 tz = timezone(fuseau)
@@ -55,23 +59,24 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
                 mj = int((ds.seconds % 3600) // 60)
 
                 st.markdown(f"""
-                <div style="display:flex;flex-direction:column;gap:2px;margin-top:6px;
-                            font-size:0.68rem;font-weight:600;color:#64748b">
+                <div style="display:flex;flex-direction:column;gap:4px;padding:6px 0 0 4px;
+                            font-size:0.75rem;font-weight:600;color:#64748b">
                     <div style="display:flex;align-items:center;gap:4px">
                         <span>☀️</span> <span>SOLEIL</span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;color:#1f2937">
-                        <span>🌅 {ls}</span>
-                        <span style="opacity:0.3">|</span>
-                        <span>🌇 {cs}</span>
-                        <span style="opacity:0.3">|</span>
-                        <span style="opacity:0.6">{hj}h{mj:02d}m</span>
-                    </div>
+                    <div style="color:#1f2937">🌅 {ls}</div>
+                    <div style="color:#1f2937">🌇 {cs}</div>
+                    <div style="opacity:0.6">{hj}h{mj:02d}m</div>
                 </div>""", unsafe_allow_html=True)
             except Exception:
                 pass  # Silencieusement ignorer les erreurs de fuseau
 
-    # ── Cellules métriques ────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    # LIGNE 2 : Métriques du parcours (km, D+, D-, durée, km/h, arr., kcal)
+    # ══════════════════════════════════════════════════════════════════════════
+    st.markdown('<div style="margin-top:10px"></div>', unsafe_allow_html=True)
+    metric_cols = st.columns(7)
+
     metrics = [
         (round(dist_tot / 1000, 1), "km",      False),
         (int(d_plus),               "D+ m",    False),
@@ -84,7 +89,7 @@ def render_metrics_banner(score: dict, dist_tot: float, d_plus: float, d_moins: 
 
     for i, (val, unit, orange) in enumerate(metrics):
         color = "#FC4C02" if orange else "inherit"
-        with cols[i + 1]:
+        with metric_cols[i]:
             st.markdown(
                 f'<div style="text-align:center;padding:2px 0">'
                 f'<div style="font-size:1.1rem;font-weight:900;letter-spacing:-0.3px;'
