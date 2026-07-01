@@ -140,9 +140,13 @@ FONDS_CARTE = {
         "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
-    "🧱 Cadastre Officiel (IGN)": (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CADASTRALPARCELS.PARCELS&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
-        "© <a href='https://www.impots.gouv.fr/' target='_blank'>DGFIP</a> / <a href='https://www.ign.fr/' target='_blank'>IGN</a>"
+    "🏔️ IGN Topo (Classique)": (
+        "https://data.geopf.fr/wmts?"
+        "SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+        "&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal"
+        "&FORMAT=image/jpeg&TILEMATRIXSET=PM"
+        "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "© IGN"
     ),
     "🗺️ CartoDB Positron (épuré)": ("CartoDB positron", None),
     "🌍 OpenStreetMap (classique)": ("OpenStreetMap", None),
