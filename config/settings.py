@@ -141,9 +141,17 @@ FONDS_CARTE = {
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
     "🏔️ IGN Topo (Précis)": (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&apikey=choisirgeoportail",
-        "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
-    ),
+    "https://data.geopf.fr/wmts?"
+    "SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+    "&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS"
+    "&STYLE=normal"
+    "&TILEMATRIXSET=PM"
+    "&FORMAT=image/png"
+    "&TILEMATRIX={z}"
+    "&TILEROW={y}"
+    "&TILECOL={x}",
+    "© IGN / Géoplateforme",
+),
     "🗺️ CartoDB Positron (épuré)": ("CartoDB positron", None),
     "🌍 OpenStreetMap (classique)": ("OpenStreetMap", None),
     "🏔️ OpenTopoMap (relief)": (
