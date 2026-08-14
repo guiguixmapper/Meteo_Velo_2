@@ -7,10 +7,7 @@ Interface Streamlit optimisée avec 4 onglets thématiques.
 
 import streamlit as st
 import logging
-<<<<<<< HEAD
 import pandas as pd
-=======
->>>>>>> 406e44053f98b5a3eafcaadacb38ec8b3d5dfd25
 from datetime import datetime
 
 # Configuration logging
@@ -192,11 +189,8 @@ def main():
     data = processor.process(progress_container)
     
     if data is None:
-<<<<<<< HEAD
         # L'erreur détaillée est affichée par processor.process()
-=======
         st.error("❌ Erreur lors du traitement du parcours.")
->>>>>>> 406e44053f98b5a3eafcaadacb38ec8b3d5dfd25
         return
     
     # Effacer container de progression
