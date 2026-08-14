@@ -10,10 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
-<<<<<<< HEAD
 import pandas as pd
-=======
->>>>>>> 406e44053f98b5a3eafcaadacb38ec8b3d5dfd25
 
 # Services métier
 from core.services.route_service import (
@@ -226,7 +223,6 @@ class DataProcessor:
             
         except Exception as e:
             import logging
-<<<<<<< HEAD
             import traceback
             error_msg = f"Erreur traitement données : {str(e)}"
             logging.error(error_msg)
@@ -235,9 +231,6 @@ class DataProcessor:
             # Afficher l'erreur à l'utilisateur
             progress_container.empty()
             st.error(f"❌ **Erreur lors du traitement du parcours:**\n\n{str(e)}\n\n**Stack trace:**\n```\n{traceback.format_exc()}\n```")
-=======
-            logging.error(f"Erreur traitement données : {e}")
->>>>>>> 406e44053f98b5a3eafcaadacb38ec8b3d5dfd25
             return None
     
     def _load_gpx(self, progress_container) -> Optional[list]:
