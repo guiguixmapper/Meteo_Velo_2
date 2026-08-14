@@ -8,6 +8,7 @@ Sépare la logique métier de l'interface Streamlit.
 from typing import Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import time
 import streamlit as st
 from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
@@ -119,7 +120,7 @@ class DataProcessor:
             if not points_gpx:
                 return None
             
-            # 2. Récupération données externes (parallèle)
+            # 2. Récupération données externes
             lat, lon = points_gpx[0].latitude, points_gpx[0].longitude
             timezone, sunrise_sunset, uv_pollen, water_points = self._fetch_external_data(
                 lat, lon,
@@ -142,7 +143,7 @@ class DataProcessor:
             if self.config.noms_osm and climbs:
                 climbs = self._enrich_osm_names(climbs, progress_container)
             
-            # 6. Récupération météo
+            # 6. Récupération météo (Open-Meteo — séquentiel, après fuseau/UV)
             weather_results, error_weather = self._fetch_weather(
                 route_data["checkpoints"],
                 self.config.date_dep,
@@ -250,23 +251,32 @@ class DataProcessor:
     
     def _fetch_external_data(self, lat: float, lon: float, date_dep, points_gpx: list,
                             progress_container) -> tuple:
-        """Récupère données externes en parallèle."""
+        """Récupère les données externes.
+
+        Open-Meteo est appelé en séquence (fuseau → UV) pour éviter les 429.
+        Soleil (API distincte) et points d'eau (OSM) restent en parallèle.
+        """
         date_str = date_dep.strftime("%Y-%m-%d")
         coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
-        
+
         with progress_container.container():
-            with st.spinner("🌐 Recherche en parallèle : Météo, Soleil, UV, Points d'eau…"):
-                with ThreadPoolExecutor(max_workers=4) as executor:
-                    future_tz = executor.submit(recuperer_fuseau, lat, lon)
+            # 1) APIs non Open-Meteo en parallèle (pas de rate-limit croisé)
+            with st.spinner("🌅 Soleil & points d'eau…"):
+                with ThreadPoolExecutor(max_workers=2) as executor:
                     future_sun = executor.submit(recuperer_soleil, lat, lon, date_str)
-                    future_uv = executor.submit(recuperer_uv_pollen, lat, lon, date_str)
                     future_water = executor.submit(recuperer_points_eau, coords_tuple)
-                    
-                    timezone = future_tz.result()
                     sunrise_sunset = future_sun.result()
-                    uv_pollen = future_uv.result()
                     water_points = future_water.result()
-        
+
+            # 2) Open-Meteo en séquence pour respecter le rate-limit
+            with st.spinner("🌍 Fuseau horaire…"):
+                timezone = recuperer_fuseau(lat, lon)
+
+            time.sleep(0.8)  # petite pause entre appels Open-Meteo
+
+            with st.spinner("☀️ UV & pollen…"):
+                uv_pollen = recuperer_uv_pollen(lat, lon, date_str)
+
         return timezone, sunrise_sunset, uv_pollen, water_points
     
     def _calculate_route(self, points_gpx: list, progress_container) -> Optional[RouteResult]:
@@ -334,7 +344,10 @@ class DataProcessor:
     
     def _fetch_weather(self, checkpoints: list, date_dep,
                       progress_container) -> tuple[list, bool]:
-        """Récupère les données météo."""
+        """Récupère les données météo (Open-Meteo, après fuseau/UV)."""
+        # Petite pause pour éviter d'enchaîner trop vite après UV
+        time.sleep(0.8)
+
         with progress_container.container():
             with st.spinner("📡 Récupération météo…"):
                 # Sous-échantillonnage si trop de checkpoints
