@@ -98,7 +98,7 @@ def render_weather_view(resultats, analyse_meteo, uv_pollen, err_meteo):
             '<div style="font-size:0.83rem;opacity:0.55">✅ Aucune alerte</div>'}
         </div>""", unsafe_allow_html=True)
 
-    st.plotly_chart(creer_figure_meteo(resultats), use_container_width=True, key="weather_chart")
+    st.plotly_chart(creer_figure_meteo(resultats), width="stretch", key="weather_chart")
 
     # Analyse météo détaillée
     if analyse_meteo:

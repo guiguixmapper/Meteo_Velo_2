@@ -92,7 +92,7 @@ def render_profile_climbs_view(df_profil, ascensions, vitesse, ref_val, ftp_fc, 
     if not df_profil.empty:
         st.plotly_chart(
             creer_figure_profil(df_profil, ascensions, vitesse, ref_val, mode, poids, idx_survol),
-            use_container_width=True, key="profile_main_chart")
+            width="stretch", key="profile_main_chart")
 
     # ── TABLEAU ASCENSIONS (COMPACT) ──
     st.markdown("### 🏔️ Ascensions")
@@ -127,7 +127,7 @@ def render_profile_climbs_view(df_profil, ascensions, vitesse, ref_val, ftp_fc, 
     if "Nom" not in df_asc.columns:
         df_asc["Nom"] = "—"
 
-    st.dataframe(df_asc[cols_aff], use_container_width=True, hide_index=True, key="climbs_df",
+    st.dataframe(df_asc[cols_aff], width="stretch", hide_index=True, key="climbs_df",
         column_config={
             "Nom":            st.column_config.TextColumn("🏔️ Nom"),
             "Temps VAM":      st.column_config.TextColumn("⏱️ Temps"),
@@ -161,4 +161,4 @@ def render_profile_climbs_view(df_profil, ascensions, vitesse, ref_val, ftp_fc, 
     if not df_profil.empty:
         fig_col = creer_figure_col(df_profil, asc_sel, nb_segments=nb_segs)
         if fig_col:
-            st.plotly_chart(fig_col, use_container_width=True, key="climbs_fig_col")
+            st.plotly_chart(fig_col, width="stretch", key="climbs_fig_col")
