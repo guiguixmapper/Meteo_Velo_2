@@ -4,6 +4,8 @@ config/settings.py
 Toutes les constantes de l'application en un seul endroit.
 """
 
+from typing import TypeAlias
+
 # ==============================================================================
 # DÉTECTION DES ASCENSIONS
 # ==============================================================================
@@ -131,7 +133,32 @@ GEL_GLUCIDES_G   = 25   # glucides par gel
 COULEUR_TEAL      = "#0d9488"
 COULEUR_TEAL_DARK = "#0f766e"
 
-FONDS_CARTE = {
+# ==============================================================================
+# TYPE ALIASES
+# ==============================================================================
+
+# Zone d'entraînement : (ratio_min, ratio_max, numero, label, couleur)
+Zone: TypeAlias = tuple[float, float, int, str, str]
+
+# Données météo d'un checkpoint
+WeatherData: TypeAlias = dict[str, str | float | int | None]
+
+# Point du profil altimétrique
+ProfilePoint: TypeAlias = dict[str, float | int]
+
+# Données d'un checkpoint
+CheckpointData: TypeAlias = dict[str, str | float | int]
+
+# Données d'une ascension
+ClimbData: TypeAlias = dict[str, str | float | int | None]
+
+# Résultat du calcul de parcours
+RouteResult: TypeAlias = dict[str, list | dict | float | int]
+
+# Configuration d'une carte (URL + attribution)
+MapConfig: TypeAlias = dict[str, tuple[str, str | None]]
+
+FONDS_CARTE: MapConfig = {
     "🗺️ Plan IGN (Standard)": (
         "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"

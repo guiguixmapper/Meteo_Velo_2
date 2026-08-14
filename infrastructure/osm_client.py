@@ -62,7 +62,7 @@ out body;
             r = requests.post(serveur, data={"data": query},
                               headers=headers, timeout=TIMEOUT_OSM_S)
             if r.status_code in [429, 503, 504]:
-                raise Exception(f"Serveur surchargé ({r.status_code})")
+                raise Exception(f"Serveur surchargé ({r.status_code}) — réessai dans quelques secondes")
             r.raise_for_status()
             nodes = []
             for el in r.json().get("elements", []):
@@ -77,11 +77,18 @@ out body;
                 nodes.append(dict(nom=nom, alt=alt, lat=el["lat"], lon=el["lon"],
                                   type=t, priorite=OSM_TYPES_PRIORITE.get(t, 99)))
             return nodes
+        except requests.exceptions.Timeout:
+            logger.warning(f"Noms cols - Overpass tentative {tentative+1} ({serveur}) : Timeout après {TIMEOUT_OSM_S}s")
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"Noms cols - Overpass tentative {tentative+1} ({serveur}) : Connexion refusée (serveur indisponible)")
         except Exception as e:
-            logger.warning(f"Overpass tentative {tentative+1} ({serveur}) : {e}")
-            if tentative < MAX_RETRIES_OSM - 1:
-                time.sleep(RETRY_DELAYS[min(tentative, len(RETRY_DELAYS)-1)])
-    st.toast("⚠️ OSM instable — noms des cols potentiellement manquants.")
+            logger.warning(f"Noms cols - Overpass tentative {tentative+1} ({serveur}) : {type(e).__name__}: {e}")
+        
+        if tentative < MAX_RETRIES_OSM - 1:
+            time.sleep(RETRY_DELAYS[min(tentative, len(RETRY_DELAYS)-1)])
+    
+    logger.warning("Noms cols - Tous les serveurs Overpass indisponibles après retries")
+    st.toast("⚠️ OSM indisponible — noms des cols potentiellement manquants.")
     return []
 
 
@@ -156,6 +163,7 @@ out body;
 """
     pts_ref = coords_gpx[::20]
     data    = None
+    last_error = None
     for url in OVERPASS_URLS:
         try:
             r = requests.post(url, data={"data": query},
@@ -163,11 +171,27 @@ out body;
                               timeout=20)
             if r.status_code == 200:
                 data = r.json(); break
+            elif r.status_code == 429:
+                last_error = f"Rate limit ({r.status_code})"
+                logger.warning(f"Points d'eau — {url} : Rate limit (429) — {r.text[:100]}")
+            else:
+                last_error = f"HTTP {r.status_code}"
+                logger.warning(f"Points d'eau — {url} : HTTP {r.status_code}")
+        except requests.exceptions.Timeout:
+            last_error = "Timeout (20s)"
+            logger.warning(f"Points d'eau — {url} : Timeout après 20s")
+        except requests.exceptions.ConnectionError as e:
+            last_error = "Connexion refusée"
+            logger.warning(f"Points d'eau — {url} : Connexion refusée (serveur indisponible)")
         except Exception as e:
-            logger.warning(f"Points d'eau — {url} : {e}")
+            last_error = str(e)
+            logger.warning(f"Points d'eau — {url} : {type(e).__name__}: {e}")
 
     if not data:
-        st.toast("⚠️ Points d'eau indisponibles (Overpass timeout).")
+        if last_error and "429" in last_error:
+            st.toast("⚠️ Points d'eau: API Overpass rate-limitée. Réessayez dans 1 min.")
+        else:
+            st.toast("⚠️ Points d'eau indisponibles (serveur Overpass injoignable).")
         return []
 
     points = []
