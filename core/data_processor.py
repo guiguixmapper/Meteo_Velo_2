@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import time
 import streamlit as st
-from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 
 # Services métier
@@ -253,22 +252,21 @@ class DataProcessor:
                             progress_container) -> tuple:
         """Récupère les données externes.
 
-        Open-Meteo est appelé en séquence (fuseau → UV) pour éviter les 429.
-        Soleil (API distincte) et points d'eau (OSM) restent en parallèle.
+        Tout s'exécute sur le thread Streamlit principal.
+        Les fonctions @st.cache_data ne doivent PAS être appelées depuis
+        un ThreadPoolExecutor (CacheReplayClosureError).
+        Open-Meteo reste séquentiel (fuseau → UV) pour éviter les 429.
         """
         date_str = date_dep.strftime("%Y-%m-%d")
         coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
 
         with progress_container.container():
-            # 1) APIs non Open-Meteo en parallèle (pas de rate-limit croisé)
-            with st.spinner("🌅 Soleil & points d'eau…"):
-                with ThreadPoolExecutor(max_workers=2) as executor:
-                    future_sun = executor.submit(recuperer_soleil, lat, lon, date_str)
-                    future_water = executor.submit(recuperer_points_eau, coords_tuple)
-                    sunrise_sunset = future_sun.result()
-                    water_points = future_water.result()
+            with st.spinner("🌅 Lever / coucher du soleil…"):
+                sunrise_sunset = recuperer_soleil(lat, lon, date_str)
 
-            # 2) Open-Meteo en séquence pour respecter le rate-limit
+            with st.spinner("💧 Points d'eau (OpenStreetMap)…"):
+                water_points = recuperer_points_eau(coords_tuple)
+
             with st.spinner("🌍 Fuseau horaire…"):
                 timezone = recuperer_fuseau(lat, lon)
 

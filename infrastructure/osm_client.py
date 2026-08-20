@@ -88,7 +88,6 @@ out body;
             time.sleep(RETRY_DELAYS[min(tentative, len(RETRY_DELAYS)-1)])
     
     logger.warning("Noms cols - Tous les serveurs Overpass indisponibles après retries")
-    st.toast("⚠️ OSM indisponible — noms des cols potentiellement manquants.")
     return []
 
 
@@ -142,7 +141,11 @@ def enrichir_cols(ascensions: list, points_gpx: list) -> list:
 
 @st.cache_data(ttl=CACHE_OSM_TTL, show_spinner=False)
 def recuperer_points_eau(coords_gpx: tuple) -> list:
-    """Récupère les fontaines, sources et points d'eau potable."""
+    """Récupère les fontaines, sources et points d'eau potable.
+
+    Ne jamais appeler st.* ici : le cache Streamlit rejoue les widgets au hit
+    et plante (CacheReplayClosureError) si le layout a changé.
+    """
     if not coords_gpx:
         return []
 
@@ -188,10 +191,7 @@ out body;
             logger.warning(f"Points d'eau — {url} : {type(e).__name__}: {e}")
 
     if not data:
-        if last_error and "429" in last_error:
-            st.toast("⚠️ Points d'eau: API Overpass rate-limitée. Réessayez dans 1 min.")
-        else:
-            st.toast("⚠️ Points d'eau indisponibles (serveur Overpass injoignable).")
+        logger.warning("Points d'eau indisponibles — %s", last_error or "aucun serveur Overpass n'a répondu")
         return []
 
     points = []
