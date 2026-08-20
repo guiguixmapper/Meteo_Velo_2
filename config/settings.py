@@ -90,19 +90,21 @@ OVERPASS_URLS = [
     "https://lz4.overpass-api.de/api/interpreter",
     "https://z.overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
 ]
 
-RAYON_SOMMET_M  = 800
+RAYON_SOMMET_M  = 1500
 RAYON_EAU_M     = 1500
 TIMEOUT_OSM_S   = 25
-MAX_RETRIES_OSM = 4
-RETRY_DELAYS    = [2, 5, 10]
+MAX_RETRIES_OSM = 5
+RETRY_DELAYS    = [2, 5, 10, 15]
 
 OSM_TYPES_PRIORITE = {
     "mountain_pass": 0,
     "saddle":        1,
-    "peak":          2,
-    "volcano":       3,
+    "col_locality":  2,
+    "peak":          3,
+    "volcano":       4,
 }
 
 # ==============================================================================

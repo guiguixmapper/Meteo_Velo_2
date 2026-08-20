@@ -140,7 +140,7 @@ class DataProcessor:
             
             # 5. Enrichissement OSM (noms des cols)
             if self.config.noms_osm and climbs:
-                climbs = self._enrich_osm_names(climbs, progress_container)
+                climbs = self._enrich_osm_names(climbs, points_gpx, progress_container)
             
             # 6. Récupération météo (Open-Meteo — séquentiel, après fuseau/UV)
             weather_results, error_weather = self._fetch_weather(
@@ -328,16 +328,23 @@ class DataProcessor:
         
         return climbs
     
-    def _enrich_osm_names(self, climbs: list, progress_container) -> list:
+    def _enrich_osm_names(self, climbs: list, points_gpx: list, progress_container) -> list:
         """Enrichit les noms des cols via OSM."""
         with progress_container.container():
             with st.spinner("🗺️ Noms des cols (OpenStreetMap)…"):
-                climbs = enrichir_cols(climbs, [])  # TODO: passer points_gpx
-        
+                climbs = enrichir_cols(climbs, points_gpx)
+
         for climb in climbs:
             climb.setdefault("Nom", "—")
             climb.setdefault("Nom OSM alt", None)
-        
+
+        named = sum(1 for c in climbs if c.get("Nom") and c["Nom"] != "—")
+        if climbs and named == 0:
+            st.warning(
+                "⚠️ Aucun nom de col trouvé. OpenStreetMap n'a pas répondu "
+                "ou aucun col n'est cartographié près des sommets."
+            )
+
         return climbs
     
     def _fetch_weather(self, checkpoints: list, date_dep,
