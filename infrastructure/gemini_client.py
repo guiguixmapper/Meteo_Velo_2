@@ -33,7 +33,7 @@ def generer_briefing(
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-3.6-flash")
 
         # Préparer les données
         from core.services.nutrition_service import calculer_hydratation, calculer_glucides
