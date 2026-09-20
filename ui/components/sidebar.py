@@ -7,10 +7,13 @@ Sidebar — design Strava : orange, blanc, sections labellisées.
 import streamlit as st
 import base64
 from datetime import time
+
 from config.settings import (
     SENSIBILITE_LABELS, SENSIBILITE_PARAMS,
     SEUIL_DEBUT, SEUIL_FIN, MAX_DESCENTE_FUSION_M,
+    GEMINI_API_KEY,
 )
+from infrastructure.runtime_config import render_overpass_control
 import core.services.climbing_service as climbing_module
 
 
@@ -30,11 +33,11 @@ def render_sidebar():
       </div>
     </div>""", unsafe_allow_html=True)
 
-    # ── Fichier ──────────────────────────────────────────────────────────────
+    # ── Fichier ──────────────────────────────────────────────────────────
     st.sidebar.markdown('<div class="sb-section">📂 Fichier</div>', unsafe_allow_html=True)
     fichier = st.sidebar.file_uploader("Trace GPX", type=["gpx"], label_visibility="collapsed")
 
-    # ── Sortie ──────────────────────────────────────────────────────────────
+    # ── Sortie ──────────────────────────────────────────────────────────
     from datetime import date
     st.sidebar.markdown('<div class="sb-section">🗓️ Sortie</div>', unsafe_allow_html=True)
     date_dep = st.sidebar.date_input("Date", value=date.today(), label_visibility="collapsed")
@@ -61,7 +64,7 @@ def render_sidebar():
         fc_max  = ref_val
         ftp_fc  = st.sidebar.number_input("FTP estimé (W)", 50, 500, 220)
 
-    # ── Météo ──────────────────────────────────────────────────────────────
+    # ── Météo ──────────────────────────────────────────────────────────
     st.sidebar.markdown('<div class="sb-section">🌤️ Météo</div>', unsafe_allow_html=True)
     intervalle = st.sidebar.selectbox(
         "Intervalle", options=[5, 10, 15], index=1,
@@ -114,10 +117,17 @@ def render_sidebar():
             help="Peut être lent ou indisponible sur Streamlit Cloud.")
         if noms_osm:
             st.warning("⚠️ Serveurs Overpass souvent surchargés sur Streamlit Cloud.")
-        gemini_key = st.text_input("🤖 Clé API Gemini", value="", type="password",
-            help="Clé gratuite sur aistudio.google.com.")
 
-    # ── Placeholders ──────────────────────────────────────────────────────────
+        if GEMINI_API_KEY:
+            st.success("✅ Clé Gemini chargée depuis les secrets / variables d'environnement")
+            gemini_key = GEMINI_API_KEY
+        else:
+            st.warning("⚠️ GEMINI_API_KEY introuvable. Ajoutez le secret puis redémarrez.")
+            gemini_key = ""
+
+        render_overpass_control()
+
+    # ── Placeholders ────────────────────────────────────────────────────────
     ph_fuseau = st.sidebar.empty()
     ph_fuseau.markdown("""
     <div style="background:#F5F5F5;border-radius:8px;padding:7px 12px;
