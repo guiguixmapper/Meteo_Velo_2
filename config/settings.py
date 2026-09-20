@@ -1,10 +1,26 @@
-"""
-config/settings.py
-==================
-Toutes les constantes de l'application en un seul endroit.
-"""
-
+import os
 from typing import TypeAlias
+
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - Streamlit absent in non-app contexts
+    st = None
+
+
+def get_gemini_api_key() -> str:
+    """Return Gemini key from environment or Streamlit secrets."""
+    value = os.getenv("GEMINI_API_KEY", "").strip()
+    if value:
+        return value
+    if st is not None:
+        try:
+            value = str(st.secrets.get("GEMINI_API_KEY", "")).strip()
+        except Exception:
+            value = ""
+    return value
+
+
+GEMINI_API_KEY = get_gemini_api_key()
 
 # ==============================================================================
 # DÉTECTION DES ASCENSIONS
@@ -162,17 +178,17 @@ MapConfig: TypeAlias = dict[str, tuple[str, str | None]]
 
 FONDS_CARTE: MapConfig = {
     "🗺️ Plan IGN (Standard)": (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TI[...]",
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
     "📸 Photos Aériennes (IGN)": (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL[... ]",
         "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
     ),
     "🏔️ IGN Topo (Précis)": (
-        "https://data.geopf.fr/private/wmts?apikey=ign_scan_ws&layer=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR&style=normal&tilematrixset=PM&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fjpeg&TileMatrix={0}&TileCol={1}&TileRow={2}",
+        "https://data.geopf.fr/private/wmts?apikey=ign_scan_ws&layer=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR&style=normal&tilematrixset=PM&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%[... ]",
         "© IGN / Géoplateforme",
-),
+    ),
     "🗺️ CartoDB Positron (épuré)": ("CartoDB positron", None),
     "🌍 OpenStreetMap (classique)": ("OpenStreetMap", None),
     "🏔️ OpenTopoMap (relief)": (
