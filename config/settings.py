@@ -1,14 +1,26 @@
+"""
+config/settings.py
+==================
+Toutes les constantes de l'application en un seul endroit.
+"""
+
+from __future__ import annotations
+
 import os
-from typing import TypeAlias
 
 try:
     import streamlit as st
 except Exception:  # pragma: no cover - Streamlit absent in non-app contexts
     st = None
 
+from typing import TypeAlias
+
+# ============================================================================== 
+# GÉNÉRATION DES CLES API
+# ============================================================================== 
 
 def get_gemini_api_key() -> str:
-    """Return Gemini key from environment or Streamlit secrets."""
+    """Retourne la clé Gemini depuis l'environnement ou les secrets Streamlit."""
     value = os.getenv("GEMINI_API_KEY", "").strip()
     if value:
         return value
@@ -19,12 +31,11 @@ def get_gemini_api_key() -> str:
             value = ""
     return value
 
-
 GEMINI_API_KEY = get_gemini_api_key()
 
-# ==============================================================================
+# ============================================================================== 
 # DÉTECTION DES ASCENSIONS
-# ==============================================================================
+# ============================================================================== 
 
 LISSAGE_F             = 5      # points — fenêtre de lissage (impair)
 FENETRE_PENTE_M       = 300    # m — fenêtre de calcul de la pente glissante
@@ -155,42 +166,41 @@ COULEUR_TEAL_DARK = "#0f766e"
 # TYPE ALIASES
 # ==============================================================================
 
-# Zone d'entraînement : (ratio_min, ratio_max, numero, label, couleur)
 Zone: TypeAlias = tuple[float, float, int, str, str]
-
-# Données météo d'un checkpoint
 WeatherData: TypeAlias = dict[str, str | float | int | None]
-
-# Point du profil altimétrique
 ProfilePoint: TypeAlias = dict[str, float | int]
-
-# Données d'un checkpoint
 CheckpointData: TypeAlias = dict[str, str | float | int]
-
-# Données d'une ascension
 ClimbData: TypeAlias = dict[str, str | float | int | None]
-
-# Résultat du calcul de parcours
 RouteResult: TypeAlias = dict[str, list | dict | float | int]
-
-# Configuration d'une carte (URL + attribution)
 MapConfig: TypeAlias = dict[str, tuple[str, str | None]]
+
+IGN_WMTS_BASE = (
+    "https://data.geopf.fr/wmts?"
+    "SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0"
+)
+IGN_ATTRIBUTION = "© IGN / Géoplateforme"
 
 FONDS_CARTE: MapConfig = {
     "🗺️ Plan IGN (Standard)": (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TI[...]",
-        "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
+        f"{IGN_WMTS_BASE}&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2"
+        "&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM"
+        "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        IGN_ATTRIBUTION,
     ),
-    "📸 Photos Aériennes (IGN)": (
-        "https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=HR.ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL[... ]",
-        "© <a href='https://www.ign.fr/' target='_blank'>IGN</a> / Géoplateforme"
+    "🏔️ IGN Topo 1:25 000 (SCAN 25)": (
+        f"{IGN_WMTS_BASE}&LAYER=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR"
+        "&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM"
+        "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        IGN_ATTRIBUTION,
     ),
-    "🏔️ IGN Topo (Précis)": (
-        "https://data.geopf.fr/private/wmts?apikey=ign_scan_ws&layer=GEOGRAPHICALGRIDSYSTEMS.MAPS.SCAN25TOUR&style=normal&tilematrixset=PM&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%[... ]",
-        "© IGN / Géoplateforme",
+    "📸 Photos aériennes IGN": (
+        f"{IGN_WMTS_BASE}&LAYER=ORTHOIMAGERY.ORTHOPHOTOS"
+        "&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM"
+        "&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",
+        IGN_ATTRIBUTION,
     ),
     "🗺️ CartoDB Positron (épuré)": ("CartoDB positron", None),
-    "🌍 OpenStreetMap (classique)": ("OpenStreetMap", None),
+    "🌍 OpenStreetMap (classuel)": ("OpenStreetMap", None),
     "🏔️ OpenTopoMap (relief)": (
         "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
         "Map data © OpenStreetMap contributors, SRTM | Map style © OpenTopoMap (CC-BY-SA)",
