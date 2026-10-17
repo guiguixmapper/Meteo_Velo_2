@@ -167,6 +167,7 @@ def _query_cols(south: float, west: float, north: float, east: float) -> str:
         "(\n"
         f'  node["mountain_pass"="yes"]({south:.5f},{west:.5f},{north:.5f},{east:.5f});\n'
         f'  node["natural"="saddle"]["name"]({south:.5f},{west:.5f},{north:.5f},{east:.5f});\n'
+        f'  node["natural"="peak"]["name"]({south:.5f},{west:.5f},{north:.5f},{east:.5f});\n'
         ");\n"
         "out body;\n"
     )
