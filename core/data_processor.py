@@ -23,7 +23,6 @@ from core.services.climbing_service import (
 from infrastructure.open_meteo_client import (
     recuperer_fuseau, recuperer_soleil, recuperer_uv_pollen, recuperer_meteo_batch,
 )
-from infrastructure.osm_client import enrichir_cols, recuperer_points_eau
 from config.settings import MAX_CHECKPOINTS_METEO, RouteResult
 
 
@@ -138,18 +137,16 @@ class DataProcessor:
             climbs = self._detect_climbs(route_data["profil_data"], points_gpx, 
                                         progress_container)
             
-            # 5. Enrichissement OSM (noms des cols)
-            if self.config.noms_osm and climbs:
-                climbs = self._enrich_osm_names(climbs, points_gpx, progress_container)
-            
-            # 6. Récupération météo (Open-Meteo — séquentiel, après fuseau/UV)
+            # 5. Météo (Open-Meteo — séquentiel, après fuseau/UV)
+            # Les requêtes Overpass (cols, points d'eau) ne partent pas ici :
+            # elles sont lancées par les boutons de la barre latérale.
             weather_results, error_weather = self._fetch_weather(
                 route_data["checkpoints"],
                 self.config.date_dep,
                 progress_container
             )
             
-            # 7. Calculs finaux
+            # 6. Calculs finaux
             date_depart = datetime.combine(self.config.date_dep, self.config.heure_dep)
             
             # Ajout checkpoint d'arrivée
@@ -258,14 +255,10 @@ class DataProcessor:
         Open-Meteo reste séquentiel (fuseau → UV) pour éviter les 429.
         """
         date_str = date_dep.strftime("%Y-%m-%d")
-        coords_tuple = tuple((p.latitude, p.longitude) for p in points_gpx[::5])
 
         with progress_container.container():
             with st.spinner("🌅 Lever / coucher du soleil…"):
                 sunrise_sunset = recuperer_soleil(lat, lon, date_str)
-
-            with st.spinner("💧 Points d'eau (OpenStreetMap)…"):
-                water_points = recuperer_points_eau(coords_tuple)
 
             with st.spinner("🌍 Fuseau horaire…"):
                 timezone = recuperer_fuseau(lat, lon)
@@ -275,7 +268,7 @@ class DataProcessor:
             with st.spinner("☀️ UV & pollen…"):
                 uv_pollen = recuperer_uv_pollen(lat, lon, date_str)
 
-        return timezone, sunrise_sunset, uv_pollen, water_points
+        return timezone, sunrise_sunset, uv_pollen, []
     
     def _calculate_route(self, points_gpx: list, progress_container) -> Optional[RouteResult]:
         """Calcule le parcours."""
@@ -326,25 +319,6 @@ class DataProcessor:
                 climb["_lat_sommet"], climb["_lon_sommet"] = find_nearest_coords(climb["_sommet_km"])
                 climb["_lat_debut"], climb["_lon_debut"] = find_nearest_coords(climb["_debut_km"])
         
-        return climbs
-    
-    def _enrich_osm_names(self, climbs: list, points_gpx: list, progress_container) -> list:
-        """Enrichit les noms des cols via OSM."""
-        with progress_container.container():
-            with st.spinner("🗺️ Noms des cols (OpenStreetMap)…"):
-                climbs = enrichir_cols(climbs, points_gpx)
-
-        for climb in climbs:
-            climb.setdefault("Nom", "—")
-            climb.setdefault("Nom OSM alt", None)
-
-        named = sum(1 for c in climbs if c.get("Nom") and c["Nom"] != "—")
-        if climbs and named == 0:
-            st.warning(
-                "⚠️ Aucun nom de col trouvé. OpenStreetMap n'a pas répondu "
-                "ou aucun col n'est cartographié près des sommets."
-            )
-
         return climbs
     
     def _fetch_weather(self, checkpoints: list, date_dep,

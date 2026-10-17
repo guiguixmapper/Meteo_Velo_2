@@ -2,16 +2,16 @@
 infrastructure/osm_client.py
 ==============================
 Appels Overpass API (cols, points d'eau).
+Déclenchés uniquement par les boutons de la barre latérale.
 """
 
-import streamlit as st
 import requests
 import logging
 import time
 from config.settings import (
     OVERPASS_URLS, RAYON_SOMMET_M, RAYON_EAU_M,
     TIMEOUT_OSM_S, MAX_RETRIES_OSM, RETRY_DELAYS,
-    OSM_TYPES_PRIORITE, CACHE_OSM_TTL,
+    OSM_TYPES_PRIORITE,
 )
 from core.utils.geo import haversine
 
@@ -51,6 +51,8 @@ def _point_au_km(points_gpx: list, km_cible: float) -> tuple | None:
 def _parse_osm_nodes(payload: dict) -> list:
     nodes = []
     for el in payload.get("elements", []):
+        if "lat" not in el or "lon" not in el:
+            continue
         tags = el.get("tags", {})
         nom = tags.get("name:fr") or tags.get("name") or tags.get("name:en")
         if not nom:
@@ -68,62 +70,134 @@ def _parse_osm_nodes(payload: dict) -> list:
     return nodes
 
 
-def _overpass_query(query: str) -> list:
-    """POST Overpass, retry sur plusieurs miroirs. Pas de st.* (cache-safe)."""
+def _overpass_json(query: str) -> tuple[dict | None, str | None]:
+    """POST une requête courte. Essaie le miroir suivant sans longue attente."""
     headers = {
-        "User-Agent": "VeloMeteoApp/8.0 Streamlit",
-        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "MeteoVelo/2 (github.com/guiguixmapper/Meteo_Velo_2)",
+        "Accept": "application/json",
     }
-    for tentative in range(MAX_RETRIES_OSM):
-        serveur = OVERPASS_URLS[tentative % len(OVERPASS_URLS)]
+    last_error = "aucun serveur Overpass n'a répondu"
+    essais = OVERPASS_URLS[:MAX_RETRIES_OSM]
+    for i, url in enumerate(essais):
+        hote = url.split("/")[2]
         try:
             r = requests.post(
-                serveur, data={"data": query},
-                headers=headers, timeout=TIMEOUT_OSM_S,
+                url,
+                data={"data": query},
+                headers=headers,
+                timeout=TIMEOUT_OSM_S + 5,
             )
-            if r.status_code in (429, 503, 504):
-                raise Exception(f"Serveur surcharge ({r.status_code})")
-            r.raise_for_status()
-            return _parse_osm_nodes(r.json())
+            if r.status_code == 200:
+                try:
+                    return r.json(), None
+                except ValueError:
+                    last_error = f"réponse illisible ({hote})"
+            else:
+                last_error = f"HTTP {r.status_code} ({hote})"
+                logger.warning("OSM %s : %s", hote, last_error)
         except requests.exceptions.Timeout:
-            logger.warning("OSM tentative %s (%s) : timeout %ss", tentative + 1, serveur, TIMEOUT_OSM_S)
+            last_error = f"timeout {TIMEOUT_OSM_S}s ({hote})"
+            logger.warning("OSM %s", last_error)
         except requests.exceptions.ConnectionError:
-            logger.warning("OSM tentative %s (%s) : connexion refusee", tentative + 1, serveur)
+            last_error = f"connexion impossible ({hote})"
+            logger.warning("OSM %s", last_error)
         except Exception as e:
-            logger.warning("OSM tentative %s (%s) : %s: %s", tentative + 1, serveur, type(e).__name__, e)
-        if tentative < MAX_RETRIES_OSM - 1:
-            time.sleep(RETRY_DELAYS[min(tentative, len(RETRY_DELAYS) - 1)])
-    logger.warning("OSM - tous les serveurs Overpass indisponibles")
-    return []
+            last_error = f"{type(e).__name__}: {e}"
+            logger.warning("OSM %s : %s", hote, last_error)
+        if i < len(essais) - 1:
+            time.sleep(RETRY_DELAYS[min(i, len(RETRY_DELAYS) - 1)])
+    return None, last_error
 
 
-@st.cache_data(ttl=CACHE_OSM_TTL, show_spinner=False)
-def _requete_osm_around(sommets: tuple) -> list:
-    """Cols / sommets dans un rayon autour de chaque sommet d'ascension."""
-    if not sommets:
+def _echantillon_route(coords: list, pas_m: float, max_pts: int) -> list:
+    """Quelques points le long du tracé, pas toute la trace."""
+    if not coords:
         return []
-    sommets = sommets[:40]
-    rayon = int(RAYON_SOMMET_M)
-    blocs = []
-    for lat, lon in sommets:
-        blocs.append(
-            f'  node["mountain_pass"="yes"](around:{rayon},{lat:.5f},{lon:.5f});\n'
-            f'  node["natural"="saddle"]["name"](around:{rayon},{lat:.5f},{lon:.5f});\n'
-            f'  node["natural"="peak"]["name"](around:{rayon},{lat:.5f},{lon:.5f});\n'
-            f'  node["natural"="volcano"]["name"](around:{rayon},{lat:.5f},{lon:.5f});\n'
-            f'  node["place"="locality"]["name"~"^[Cc]ol ",i](around:{rayon},{lat:.5f},{lon:.5f});'
-        )
-    query = (
-        f"[out:json][timeout:{TIMEOUT_OSM_S}];\n"
-        "(\n" + "\n".join(blocs) + "\n);\nout body;"
+    choisi = [coords[0]]
+    acc = 0.0
+    prev = coords[0]
+    for lat, lon in coords[1:]:
+        acc += haversine(prev[0], prev[1], lat, lon)
+        prev = (lat, lon)
+        if acc >= pas_m:
+            choisi.append((lat, lon))
+            acc = 0.0
+            if len(choisi) >= max_pts:
+                return choisi
+    fin = coords[-1]
+    if choisi[-1] != fin and len(choisi) < max_pts:
+        choisi.append(fin)
+    return choisi
+
+
+def _bbox_deg(coords: list, pad_deg: float = 0.015) -> tuple[float, float, float, float]:
+    lats = [c[0] for c in coords]
+    lons = [c[1] for c in coords]
+    return (
+        min(lats) - pad_deg,
+        min(lons) - pad_deg,
+        max(lats) + pad_deg,
+        max(lons) + pad_deg,
     )
-    return _overpass_query(query)
 
 
-def enrichir_cols(ascensions: list, points_gpx: list) -> list:
-    """Enrichit chaque ascension avec le nom OSM du col/sommet."""
+def _boites_cols(coords: list) -> list[tuple[float, float, float, float]]:
+    """Une bbox, ou deux si le parcours est trop étendu pour une seule requête."""
+    south, west, north, east = _bbox_deg(coords)
+    if (north - south) <= 0.8 and (east - west) <= 1.2:
+        return [(south, west, north, east)]
+    milieu = sorted(coords, key=lambda c: c[0])
+    coupe = max(1, len(milieu) // 2)
+    return [_bbox_deg(milieu[:coupe]), _bbox_deg(milieu[coupe:])]
+
+
+def _query_cols(south: float, west: float, north: float, east: float) -> str:
+    # Uniquement cols et cols nommés. Pas de sommets, volcans, ni regex :
+    # ces filtres font rejeter ou expirer la requête côté Overpass.
+    return (
+        f"[out:json][timeout:{TIMEOUT_OSM_S}];\n"
+        "(\n"
+        f'  node["mountain_pass"="yes"]({south:.5f},{west:.5f},{north:.5f},{east:.5f});\n'
+        f'  node["natural"="saddle"]["name"]({south:.5f},{west:.5f},{north:.5f},{east:.5f});\n'
+        ");\n"
+        "out body;\n"
+    )
+
+
+def chercher_noeuds_cols(coords: list) -> tuple[list, str | None]:
+    if not coords:
+        return [], None
+    vus = []
+    dedup = set()
+    for lat, lon in coords:
+        cle = (round(lat, 3), round(lon, 3))
+        if cle not in dedup:
+            dedup.add(cle)
+            vus.append((lat, lon))
+    noeuds = []
+    deja = set()
+    erreurs = []
+    for boite in _boites_cols(vus):
+        payload, err = _overpass_json(_query_cols(*boite))
+        if not payload:
+            if err:
+                erreurs.append(err)
+            continue
+        for nd in _parse_osm_nodes(payload):
+            cle = (round(nd["lat"], 5), round(nd["lon"], 5), nd["nom"])
+            if cle in deja:
+                continue
+            deja.add(cle)
+            noeuds.append(nd)
+    if noeuds:
+        return noeuds, None
+    return [], (erreurs[-1] if erreurs else None)
+
+
+def enrichir_cols(ascensions: list, points_gpx: list) -> tuple[list, str | None]:
+    """Enrichit chaque ascension avec le nom OSM du col. Une requête manuelle."""
     if not ascensions:
-        return ascensions
+        return ascensions, None
 
     coords_sommets = []
     for asc in ascensions:
@@ -144,11 +218,15 @@ def enrichir_cols(ascensions: list, points_gpx: list) -> list:
         coords_sommets.append((asc, float(lat), float(lon), alt_gpx))
 
     if not coords_sommets:
-        return ascensions
+        return ascensions, None
 
-    frozen = tuple((round(lat, 4), round(lon, 4)) for _, lat, lon, _ in coords_sommets)
-    osm_nodes = _requete_osm_around(frozen)
+    osm_nodes, err = chercher_noeuds_cols([(lat, lon) for _, lat, lon, _ in coords_sommets])
     logger.info("OSM cols : %s noeuds pour %s sommets", len(osm_nodes), len(coords_sommets))
+    if err and not osm_nodes:
+        for asc, _, _, _ in coords_sommets:
+            asc.setdefault("Nom", "\u2014")
+            asc.setdefault("Nom OSM alt", None)
+        return ascensions, err
 
     for asc, lat, lon, alt_gpx in coords_sommets:
         candidats = []
@@ -167,88 +245,67 @@ def enrichir_cols(ascensions: list, points_gpx: list) -> list:
             asc["Nom"] = m["nom"]
             asc["Nom OSM alt"] = m["alt"]
 
-    return ascensions
+    return ascensions, None
 
 
-@st.cache_data(ttl=CACHE_OSM_TTL, show_spinner=False)
-def recuperer_points_eau(coords_gpx: tuple) -> list:
-    """Recupere les fontaines, sources et points d'eau potable.
+def recuperer_points_eau(coords_gpx: tuple) -> tuple[list, str | None]:
+    """Fontaines et bornes le long du tracé. Requête manuelle, sans sources brutes.
 
-    Ne jamais appeler st.* ici : le cache Streamlit rejoue les widgets au hit
-    et plante (CacheReplayClosureError) si le layout a change.
+    Retourne (points, erreur). erreur est None si le serveur a répondu.
     """
     if not coords_gpx:
-        return []
+        return [], None
 
-    lats = [lat for lat, lon in coords_gpx]
-    lons = [lon for lat, lon in coords_gpx]
-    min_lat = min(lats) - 0.01
-    max_lat = max(lats) + 0.01
-    min_lon = min(lons) - 0.01
-    max_lon = max(lons) + 0.01
+    coords = list(coords_gpx)
+    longueur = 0.0
+    for i in range(1, len(coords)):
+        longueur += haversine(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1])
+    pas = max(4000.0, longueur / 12.0)
+    echantillons = _echantillon_route(coords, pas_m=pas, max_pts=12)
+    if not echantillons:
+        return [], None
 
-    query = f"""
-[out:json][timeout:20][bbox:{min_lat:.5f},{min_lon:.5f},{max_lat:.5f},{max_lon:.5f}];
-(
-  node["amenity"="drinking_water"];
-  node["amenity"="water_point"];
-  node["natural"="spring"]["drinking_water"="yes"];
-  node["natural"="spring"]["name"];
-);
-out body;
-"""
-    pts_ref = coords_gpx[::20]
-    data = None
-    last_error = None
-    for url in OVERPASS_URLS:
-        try:
-            r = requests.post(
-                url, data={"data": query},
-                headers={"User-Agent": "VeloMeteoApp/8.0"},
-                timeout=20,
-            )
-            if r.status_code == 200:
-                data = r.json()
-                break
-            if r.status_code == 429:
-                last_error = f"Rate limit ({r.status_code})"
-                logger.warning("Points d'eau -- %s : Rate limit (429)", url)
-            else:
-                last_error = f"HTTP {r.status_code}"
-                logger.warning("Points d'eau -- %s : HTTP %s", url, r.status_code)
-        except requests.exceptions.Timeout:
-            last_error = "Timeout (20s)"
-            logger.warning("Points d'eau -- %s : Timeout apres 20s", url)
-        except requests.exceptions.ConnectionError:
-            last_error = "Connexion refusee"
-            logger.warning("Points d'eau -- %s : Connexion refusee", url)
-        except Exception as e:
-            last_error = str(e)
-            logger.warning("Points d'eau -- %s : %s: %s", url, type(e).__name__, e)
-
+    rayon = int(RAYON_EAU_M)
+    lignes = []
+    for lat, lon in echantillons:
+        lignes.append(
+            f'  node["amenity"="drinking_water"](around:{rayon},{lat:.5f},{lon:.5f});'
+        )
+        lignes.append(
+            f'  node["amenity"="water_point"](around:{rayon},{lat:.5f},{lon:.5f});'
+        )
+    query = (
+        f"[out:json][timeout:{TIMEOUT_OSM_S}];\n"
+        "(\n" + "\n".join(lignes) + "\n);\n"
+        "out body;\n"
+    )
+    data, err = _overpass_json(query)
     if not data:
-        logger.warning("Points d'eau indisponibles -- %s", last_error or "aucun serveur Overpass n'a repondu")
-        return []
+        return [], err
 
     points = []
+    deja = set()
     for el in data.get("elements", []):
+        if "lat" not in el or "lon" not in el:
+            continue
         lat_w, lon_w = el["lat"], el["lon"]
+        cle = (round(lat_w, 5), round(lon_w, 5))
+        if cle in deja:
+            continue
         tags = el.get("tags", {})
-        for lat_p, lon_p in pts_ref:
-            if abs(lat_w - lat_p) < 0.015 and abs(lon_w - lon_p) < 0.015:
-                if haversine(lat_w, lon_w, lat_p, lon_p) <= RAYON_EAU_M:
-                    amenity = tags.get("amenity", "")
-                    natural = tags.get("natural", "")
-                    type_eau = (
-                        "fontaine" if amenity == "drinking_water"
-                        else "borne" if amenity == "water_point"
-                        else "source" if natural == "spring"
-                        else "eau"
-                    )
-                    points.append(dict(
-                        lat=lat_w, lon=lon_w,
-                        nom=tags.get("name", "Point d'eau"),
-                        type=type_eau,
-                    ))
-                    break
-    return points
+        for lat_p, lon_p in echantillons:
+            if haversine(lat_w, lon_w, lat_p, lon_p) <= RAYON_EAU_M:
+                amenity = tags.get("amenity", "")
+                type_eau = (
+                    "fontaine" if amenity == "drinking_water"
+                    else "borne" if amenity == "water_point"
+                    else "eau"
+                )
+                points.append(dict(
+                    lat=lat_w, lon=lon_w,
+                    nom=tags.get("name", "Point d'eau"),
+                    type=type_eau,
+                ))
+                deja.add(cle)
+                break
+    return points, None

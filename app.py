@@ -7,6 +7,7 @@ Interface Streamlit optimisée avec 4 onglets thématiques.
 
 import streamlit as st
 import logging
+import hashlib
 import pandas as pd
 from datetime import datetime
 
@@ -25,6 +26,7 @@ from ui.components.coach_view import render_coach_view
 
 from core.data_processor import DataProcessor, AppConfig, ProcessedData
 from core.services.climbing_service import estimer_temps_col
+from infrastructure.osm_client import enrichir_cols, recuperer_points_eau
 
 
 def setup_page():
@@ -142,6 +144,76 @@ def render_tabs(data: ProcessedData) -> None:
         )
 
 
+def _appliquer_osm(data: ProcessedData, gpx_key: str) -> None:
+    """Réinjecte les résultats OSM déjà demandés (ils survivent au recalcul)."""
+    if st.session_state.get("osm_water_key") == gpx_key:
+        data.water_points = list(st.session_state.get("osm_water") or [])
+    else:
+        data.water_points = []
+
+    saved = (
+        st.session_state.get("osm_cols")
+        if st.session_state.get("osm_cols_key") == gpx_key
+        else None
+    )
+    for climb in data.climbs:
+        match = None
+        if saved:
+            match = next(
+                (
+                    c for c in saved
+                    if c.get("_sommet_km") == climb.get("_sommet_km")
+                    and c.get("_debut_km") == climb.get("_debut_km")
+                ),
+                None,
+            )
+        if match:
+            climb["Nom"] = match.get("Nom") or "—"
+            climb["Nom OSM alt"] = match.get("Nom OSM alt")
+        else:
+            climb.setdefault("Nom", "—")
+            climb.setdefault("Nom OSM alt", None)
+
+
+def _executer_requete_osm(data: ProcessedData, gpx_key: str) -> None:
+    """Lance uniquement la requête demandée par un bouton."""
+    req = st.session_state.pop("osm_request", None)
+    if req == "water":
+        coords = tuple((p.latitude, p.longitude) for p in data.points_gpx[::2])
+        with st.spinner("🚰 Points d'eau — requête Overpass…"):
+            pts, err = recuperer_points_eau(coords)
+        if err and not pts:
+            st.session_state["osm_water_msg"] = f"Points d'eau : {err}"
+            st.warning(f"⚠️ Overpass n'a pas répondu ({err}).")
+        else:
+            st.session_state["osm_water"] = pts
+            st.session_state["osm_water_key"] = gpx_key
+            st.session_state["osm_water_msg"] = f"{len(pts)} point(s) d'eau"
+            if not pts:
+                st.info("Aucun point d'eau (fontaine ou borne) le long de ce tracé.")
+    elif req == "cols":
+        with st.spinner("🏔️ Cols — requête Overpass…"):
+            _, err = enrichir_cols(data.climbs, data.points_gpx)
+        if err:
+            st.session_state["osm_cols_msg"] = f"Cols : {err}"
+            st.warning(f"⚠️ Overpass n'a pas répondu ({err}).")
+        else:
+            st.session_state["osm_cols"] = [
+                {
+                    "_sommet_km": c.get("_sommet_km"),
+                    "_debut_km": c.get("_debut_km"),
+                    "Nom": c.get("Nom"),
+                    "Nom OSM alt": c.get("Nom OSM alt"),
+                }
+                for c in data.climbs
+            ]
+            st.session_state["osm_cols_key"] = gpx_key
+            nommes = sum(1 for c in data.climbs if c.get("Nom") and c["Nom"] != "—")
+            st.session_state["osm_cols_msg"] = f"{nommes} col(s) nommé(s)"
+            if data.climbs and nommes == 0:
+                st.info("Aucun col OpenStreetMap près des sommets détectés.")
+
+
 def main():
     """Point d'entrée principal de l'application."""
     setup_page()
@@ -160,7 +232,7 @@ def main():
     # Préparer configuration de l'application
     progress_container = st.empty()
     app_config = AppConfig(
-        fichier=sidebar_params["fichier"].read() if sidebar_params["fichier"] else None,
+        fichier=sidebar_params["fichier"].getvalue() if sidebar_params["fichier"] else None,
         date_dep=sidebar_params["date_dep"],
         heure_dep=sidebar_params["heure_dep"],
         vitesse_kmh=sidebar_params["vitesse"],
@@ -169,7 +241,7 @@ def main():
         ref_val=sidebar_params["ref_val"],
         mode=sidebar_params["mode"],
         ftp_fc=sidebar_params["ftp_fc"],
-        noms_osm=sidebar_params["noms_osm"],
+        noms_osm=False,
         gemini_key=sidebar_params["gemini_key"],
         placeholder_fuseau=sidebar_params["ph_fuseau"],
         placeholder_export=sidebar_params["ph_export"],
@@ -183,7 +255,7 @@ def main():
     st.session_state["poids"] = app_config.poids_kg
     st.session_state["gemini_key"] = app_config.gemini_key
     st.session_state["heure_dep"] = app_config.heure_dep
-    
+
     # Traiter les données
     processor = DataProcessor(app_config)
     data = processor.process(progress_container)
@@ -192,6 +264,10 @@ def main():
         # L'erreur détaillée est affichée par processor.process()
         st.error("❌ Erreur lors du traitement du parcours.")
         return
+
+    gpx_key = hashlib.sha1(app_config.fichier or b"").hexdigest()[:12]
+    _executer_requete_osm(data, gpx_key)
+    _appliquer_osm(data, gpx_key)
     
     # Effacer container de progression
     progress_container.empty()

@@ -115,16 +115,14 @@ ZONES_FC = [
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://lz4.overpass-api.de/api/interpreter",
-    "https://z.overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
-    "https://overpass.private.coffee/api/interpreter",
 ]
 
 RAYON_SOMMET_M  = 1500
 RAYON_EAU_M     = 1500
 TIMEOUT_OSM_S   = 25
-MAX_RETRIES_OSM = 5
-RETRY_DELAYS    = [2, 5, 10, 15]
+MAX_RETRIES_OSM = 3
+RETRY_DELAYS    = [0.4, 0.8]
 
 OSM_TYPES_PRIORITE = {
     "mountain_pass": 0,

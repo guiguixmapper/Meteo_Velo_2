@@ -22,34 +22,3 @@ def get_gemini_api_key() -> str:
     except Exception:
         value = ""
     return value
-
-
-def render_overpass_control() -> None:
-    """Affiche le bouton de relance manuelle des requêtes OSM/Overpass."""
-    st.sidebar.markdown("### 📡 Données cartographiques")
-    st.sidebar.caption(
-        "Overpass est interrogé automatiquement lorsque l'enrichissement OSM est activé."
-    )
-    if st.sidebar.button(
-        "🔄 Relancer les requêtes Overpass",
-        width="stretch",
-        help="Vide le cache OSM puis relance les requêtes au prochain calcul.",
-    ):
-        st.session_state["overpass_refresh_requested"] = True
-        st.rerun()
-
-
-def consume_overpass_refresh() -> bool:
-    """Vide les caches OSM si l'utilisateur a demandé une relance."""
-    requested = bool(st.session_state.pop("overpass_refresh_requested", False))
-    if not requested:
-        return False
-
-    from infrastructure.osm_client import (
-        _requete_osm_around,
-        recuperer_points_eau,
-    )
-
-    _requete_osm_around.clear()
-    recuperer_points_eau.clear()
-    return True

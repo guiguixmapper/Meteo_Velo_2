@@ -13,7 +13,6 @@ from config.settings import (
     SEUIL_DEBUT, SEUIL_FIN, MAX_DESCENTE_FUSION_M,
     GEMINI_API_KEY,
 )
-from infrastructure.runtime_config import render_overpass_control
 import core.services.climbing_service as climbing_module
 
 
@@ -111,21 +110,31 @@ def render_sidebar():
         climbing_module.SEUIL_FIN             = st.session_state.seuil_fin
         climbing_module.MAX_DESCENTE_FUSION_M = st.session_state.fusion_m
 
+    # ── OpenStreetMap (manuel) ────────────────────────────────────────────────
+    st.sidebar.markdown('<div class="sb-section">📡 OpenStreetMap</div>', unsafe_allow_html=True)
+    st.sidebar.caption("Aucune requête automatique. Un bouton = une requête courte.")
+    col_osm1, col_osm2 = st.sidebar.columns(2)
+    with col_osm1:
+        if st.button("🚰 Points d'eau", disabled=fichier is None, key="btn_osm_eau"):
+            st.session_state["osm_request"] = "water"
+            st.rerun()
+    with col_osm2:
+        if st.button("🏔️ Cols", disabled=fichier is None, key="btn_osm_cols"):
+            st.session_state["osm_request"] = "cols"
+            st.rerun()
+    for cle in ("osm_water_msg", "osm_cols_msg"):
+        msg = st.session_state.get(cle)
+        if msg:
+            st.sidebar.caption(msg)
+
     # ── Options avancées ──────────────────────────────────────────────────────
     with st.sidebar.expander("🔧 Options avancées", expanded=False):
-        noms_osm = st.checkbox("🗺️ Nommer les cols (OpenStreetMap)", value=False,
-            help="Peut être lent ou indisponible sur Streamlit Cloud.")
-        if noms_osm:
-            st.warning("⚠️ Serveurs Overpass souvent surchargés sur Streamlit Cloud.")
-
         if GEMINI_API_KEY:
             st.success("✅ Clé Gemini chargée depuis les secrets / variables d'environnement")
             gemini_key = GEMINI_API_KEY
         else:
             st.warning("⚠️ GEMINI_API_KEY introuvable. Ajoutez le secret puis redémarrez.")
             gemini_key = ""
-
-        render_overpass_control()
 
     # ── Placeholders ────────────────────────────────────────────────────────
     ph_fuseau = st.sidebar.empty()
@@ -140,7 +149,7 @@ def render_sidebar():
         fichier=fichier, date_dep=date_dep, heure_dep=heure_dep,
         vitesse=vitesse, mode=mode, ref_val=ref_val, poids=poids,
         fc_max=fc_max, ftp_fc=ftp_fc, intervalle=intervalle,
-        intervalle_sec=intervalle * 60, noms_osm=noms_osm,
+        intervalle_sec=intervalle * 60,
         gemini_key=gemini_key, ph_fuseau=ph_fuseau, ph_export=ph_export,
     )
 
