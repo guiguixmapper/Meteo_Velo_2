@@ -85,13 +85,21 @@ def _overpass_json(query: str) -> tuple[dict | None, str | None]:
                 url,
                 data={"data": query},
                 headers=headers,
-                timeout=TIMEOUT_OSM_S + 5,
+                timeout=(6, TIMEOUT_OSM_S + 5),
             )
             if r.status_code == 200:
                 try:
-                    return r.json(), None
+                    payload = r.json()
                 except ValueError:
                     last_error = f"réponse illisible ({hote})"
+                else:
+                    remark = str(payload.get("remark") or "").strip()
+                    elements = payload.get("elements")
+                    if remark and not elements:
+                        last_error = f"{hote}: {remark[:160]}"
+                        logger.warning("OSM %s", last_error)
+                    else:
+                        return payload, None
             else:
                 last_error = f"HTTP {r.status_code} ({hote})"
                 logger.warning("OSM %s : %s", hote, last_error)
@@ -221,13 +229,14 @@ def enrichir_cols(ascensions: list, points_gpx: list) -> tuple[list, str | None]
         return ascensions, None
 
     osm_nodes, err = chercher_noeuds_cols([(lat, lon) for _, lat, lon, _ in coords_sommets])
-    logger.info("OSM cols : %s noeuds pour %s sommets", len(osm_nodes), len(coords_sommets))
     if err and not osm_nodes:
+        logger.warning("OSM cols : échec pour %s sommets — %s", len(coords_sommets), err)
         for asc, _, _, _ in coords_sommets:
             asc.setdefault("Nom", "\u2014")
             asc.setdefault("Nom OSM alt", None)
         return ascensions, err
 
+    logger.info("OSM cols : %s nœuds pour %s sommets", len(osm_nodes), len(coords_sommets))
     for asc, lat, lon, alt_gpx in coords_sommets:
         candidats = []
         for nd in osm_nodes:

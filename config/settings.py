@@ -113,9 +113,11 @@ ZONES_FC = [
 # ==============================================================================
 
 OVERPASS_URLS = [
+    # L'instance officielle (overpass-api.de) répond souvent 502.
+    # Le serveur français tient les requêtes cols / points d'eau.
+    "https://overpass.openstreetmap.fr/api/interpreter",
+    "https://overpass.osm.ch/api/interpreter",
     "https://overpass-api.de/api/interpreter",
-    "https://lz4.overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
 ]
 
 RAYON_SOMMET_M  = 1500
