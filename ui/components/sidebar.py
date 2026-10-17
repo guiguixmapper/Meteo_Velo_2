@@ -27,7 +27,7 @@ def render_sidebar():
                     display:flex;align-items:center;justify-content:center;
                     font-size:1.1rem;box-shadow:0 2px 8px rgba(252,76,2,0.4)">🚴</div>
         <div>
-          <div style="font-weight:900;font-size:0.95rem;color:#FC4C02;letter-spacing:-0.3px">Vélo & Météo</div>
+          <div style="font-weight:900;font-size:0.95rem;color:#FC4C02;letter-spacing:-0.3px">Vélo &amp; Météo</div>
           <div style="font-size:0.63rem;opacity:0.5;margin-top:1px;font-weight:500">Analyse de tracé GPX</div>
         </div>
       </div>
@@ -51,7 +51,7 @@ def render_sidebar():
     # ── Physiologie ─────────────────────────────────────────────────────────
     st.sidebar.markdown('<div class="sb-section">💪 Physiologie</div>', unsafe_allow_html=True)
     mode = st.sidebar.radio("Mode", ["⚡ Puissance", "🫀 FC"],
-                             horizontal=True, label_visibility="collapsed")
+                              horizontal=True, label_visibility="collapsed")
     if mode == "⚡ Puissance":
         col_p1, col_p2 = st.sidebar.columns(2)
         with col_p1: ref_val = st.number_input("FTP (W)", 50, 500, 220)
@@ -86,7 +86,7 @@ def render_sidebar():
         niv = st.session_state.sensibilite
         st.caption(SENSIBILITE_LABELS[niv])
 
-        if st.button("↺ Réinitialiser", width="stretch"):
+        if st.button("↺ Réinitialiser"):
             st.session_state["_reset_demande"] = True
             st.rerun()
 
@@ -105,7 +105,7 @@ def render_sidebar():
                 st.session_state["_last_sensibilite"] = niv
             st.slider("Seuil départ (%)", 0.5, 5.0, step=0.5, key="seuil_debut")
             st.slider("Seuil fin (%)",    0.0, 3.0, step=0.5, key="seuil_fin")
-            st.slider("Fusion (D− max, m)", 10, 200, step=10,  key="fusion_m")
+            st.slider("Fusion (D− max, m)", 10, 200, step=10, key="fusion_m")
 
         climbing_module.SEUIL_DEBUT           = st.session_state.seuil_debut
         climbing_module.SEUIL_FIN             = st.session_state.seuil_fin
@@ -113,7 +113,7 @@ def render_sidebar():
 
     # ── Options avancées ──────────────────────────────────────────────────────
     with st.sidebar.expander("🔧 Options avancées", expanded=False):
-        noms_osm = st.toggle("🗺️ Nommer les cols (OpenStreetMap)", value=False,
+        noms_osm = st.checkbox("🗺️ Nommer les cols (OpenStreetMap)", value=False,
             help="Peut être lent ou indisponible sur Streamlit Cloud.")
         if noms_osm:
             st.warning("⚠️ Serveurs Overpass souvent surchargés sur Streamlit Cloud.")
@@ -155,7 +155,7 @@ def render_export(ph_export, points_gpx, resultats, ascensions, points_eau,
     nom_f = f"Roadbook_{date_dep.strftime('%Y%m%d')}.html"
     with ph_export.container():
         st.sidebar.markdown('<div class="sb-section">📤 Export</div>', unsafe_allow_html=True)
-        if st.sidebar.button("📄 Télécharger le Roadbook", width="stretch"):
+        if st.sidebar.button("📄 Télécharger le Roadbook"):
             with st.spinner("Génération..."):
                 carte_export = creer_carte(points_gpx, resultats, ascensions, points_eau)
                 html_bytes   = generer_html_resume(
